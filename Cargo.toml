@@ -1,0 +1,17 @@
+[package]
+name = "rlbox_lucet_sandbox"
+version = "0.1.0"
+authors = ["shravanrn@gmail.com <shravanrn@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1.5"                    # Experimental error handling abstraction.
+goblin = "0.0.24"                    # An impish, cross-platform, ELF, Mach-o, and PE binary parsing and loading crate
+lucet-wasi = { path = "../lucet/lucet-wasi" }
+lucet-runtime = { path = "../lucet/lucet-runtime" }
+lucet-runtime-internals = { path = "../lucet/lucet-runtime/lucet-runtime-internals" }
+lucet-module-data = { path = "../lucet/lucet-module-data" }
+
+[lib]
+name = "rlbox_lucet_sandbox"
+crate-type = ["rlib", "staticlib", "cdylib"]

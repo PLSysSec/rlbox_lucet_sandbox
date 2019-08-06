@@ -94,5 +94,12 @@ fn lucet_run_function_helper(
             .collect()
     };
 
-    return inst.instance_handle.run(&name, &args).unwrap();
+    let ret = inst.instance_handle.run(&name, &args);
+    match &ret {
+        Err(e) => {
+            println!("Error {:?}!", e);
+        }
+        _ => {},
+    };
+    return ret.unwrap();
 }

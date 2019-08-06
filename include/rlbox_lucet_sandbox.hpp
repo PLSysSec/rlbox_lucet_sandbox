@@ -6,7 +6,6 @@
 #include <limits>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #define RLBOX_LUCET_UNUSED(...) (void)__VA_ARGS__
 
@@ -104,8 +103,7 @@ private:
   }
 
   template <typename T_Formal, typename T_Actual>
-  inline LucetValue serialize_arg(std::vector<T_PointerType> &allocations,
-                                  T_Actual arg) {
+  inline LucetValue serialize_arg(T_PointerType *allocations, T_Actual arg) {
     LucetValue ret;
     using T = T_Formal;
     if constexpr ((std::is_integral_v<T> || std::is_enum_v<T>)&&sizeof(T) <=
@@ -132,7 +130,9 @@ private:
       ret.f64 = arg;
     } else if constexpr (std::is_class_v<T>) {
       auto sandboxed_ptr = this->impl_malloc_in_sandbox(sizeof(T));
-      allocations.push_back(sandboxed_ptr);
+      *allocations = sandboxed_ptr;
+      allocations++;
+
       auto ptr = reinterpret_cast<T *>(
           this->impl_get_unsandboxed_pointer<T>(sandboxed_ptr));
       *ptr = arg;
@@ -150,7 +150,7 @@ private:
   }
 
   template <typename T_Ret, typename... T_FormalArgs, typename... T_ActualArgs>
-  inline void serialize_args(std::vector<T_PointerType> & /* allocations */,
+  inline void serialize_args(T_PointerType * /* allocations */,
                              LucetValue * /* out_lucet_args */,
                              T_Ret (*/* func_ptr */)(T_FormalArgs...),
                              T_ActualArgs... /* args */) {
@@ -160,7 +160,7 @@ private:
 
   template <typename T_Ret, typename T_FormalArg, typename... T_FormalArgs,
             typename T_ActualArg, typename... T_ActualArgs>
-  inline void serialize_args(std::vector<T_PointerType> &allocations,
+  inline void serialize_args(T_PointerType *allocations,
                              LucetValue *out_lucet_args,
                              T_Ret (*func_ptr)(T_FormalArg, T_FormalArgs...),
                              T_ActualArg arg, T_ActualArgs... args) {
@@ -176,14 +176,15 @@ private:
   }
 
   template <typename T_Ret, typename... T_FormalArgs, typename... T_ActualArgs>
-  inline size_t serialize_return_and_args(
-      std::vector<T_PointerType> &allocations, LucetValue *out_lucet_args,
-      T_Ret (*func_ptr)(T_FormalArgs...), T_ActualArgs &&... args) {
+  inline void serialize_return_and_args(T_PointerType *allocations,
+                                        LucetValue *out_lucet_args,
+                                        T_Ret (*func_ptr)(T_FormalArgs...),
+                                        T_ActualArgs &&... args) {
 
-    size_t ret = sizeof...(T_FormalArgs);
     if constexpr (std::is_class_v<T_Ret>) {
       auto sandboxed_ptr = this->impl_malloc_in_sandbox(sizeof(T_Ret));
-      allocations.push_back(sandboxed_ptr);
+      *allocations = sandboxed_ptr;
+      allocations++;
 
       // sanity check that pointers are stored as i32s
       static_assert(
@@ -192,12 +193,10 @@ private:
       out_lucet_args->val_type = LucetValueType_I32;
       out_lucet_args->u32 = sandboxed_ptr;
       out_lucet_args++;
-      ret++;
     }
 
     serialize_args(allocations, out_lucet_args, func_ptr,
                    std::forward<T_ActualArgs>(args)...);
-    return ret;
   }
 
   template <typename T_FormalRet, typename T_ActualRet>
@@ -266,8 +265,9 @@ protected:
                     "No context swizzling for a function pointer.");
     } else {
       // grab the memory base from the example_unsandboxed_ptr
-      uintptr_t heap_base_mask = std::numeric_limits<uintptr_t>::max() &
-                                 ~(static_cast<uintptr_t>(std::numeric_limits<T_PointerType>::max()));
+      uintptr_t heap_base_mask =
+          std::numeric_limits<uintptr_t>::max() &
+          ~(static_cast<uintptr_t>(std::numeric_limits<T_PointerType>::max()));
       uintptr_t heap_base =
           reinterpret_cast<uintptr_t>(example_unsandboxed_ptr) & heap_base_mask;
       uintptr_t ret = heap_base | p;
@@ -321,21 +321,27 @@ protected:
   template <typename T, typename T_Converted, typename... T_Args>
   auto impl_invoke_with_func_ptr(T_Converted *func_ptr, T_Args &&... params) {
     const char *func_name = reinterpret_cast<const char *>(func_ptr);
-    std::vector<T_PointerType> allocations;
     // Add one as the return value may require an arg slot for structs
+    T_PointerType allocations[1 + sizeof...(params)];
     LucetValue args[1 + sizeof...(params)];
-    size_t arg_length = serialize_return_and_args(
-        allocations, &(args[0]), func_ptr, std::forward<T_Args>(params)...);
+    serialize_return_and_args(&(allocations[0]), &(args[0]), func_ptr,
+                              std::forward<T_Args>(params)...);
 
     using T_Ret = lucet_detail::return_argument<T_Converted>;
+    constexpr size_t alloc_length =
+        std::is_class_v<T_Ret> + (std::is_class_v<T_Args> + ...);
+    constexpr size_t arg_length =
+        sizeof...(params) + (std::is_class_v<T_Ret> ? 1 : 0);
+
     // struct returns are returned as pointers
-    using T_Wasm_Ret = typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type;
+    using T_Wasm_Ret =
+        typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type;
 
     if constexpr (std::is_void_v<T_Wasm_Ret>) {
       lucet_run_function_return_void(sandbox, func_name, arg_length,
                                      &(args[0]));
-      for (auto ptr : allocations) {
-        impl_free_in_sandbox(ptr);
+      for (size_t i = 0; i < alloc_length; i++) {
+        impl_free_in_sandbox(allocations[i]);
       }
       return;
     } else {
@@ -354,14 +360,15 @@ protected:
         ret = lucet_run_function_return_f64(sandbox, func_name, arg_length,
                                             &(args[0]));
       } else {
-        static_assert(lucet_detail::false_v<T_Wasm_Ret>, "Unknown invoke return type");
+        static_assert(lucet_detail::false_v<T_Wasm_Ret>,
+                      "Unknown invoke return type");
       }
 
       auto serialized_ret = serialize_return_value<T_Ret>(ret);
       // free only after serializing return, as return values such as structs
       // are returned as pointers which we must free
-      for (auto ptr : allocations) {
-        impl_free_in_sandbox(ptr);
+      for (size_t i = 0; i < alloc_length; i++) {
+        impl_free_in_sandbox(allocations[i]);
       }
       return serialized_ret;
     }

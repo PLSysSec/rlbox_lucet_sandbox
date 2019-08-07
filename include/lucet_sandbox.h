@@ -49,22 +49,22 @@ void lucet_ensure_linked();
 LucetSandboxInstance *lucet_load_module(const char *lucet_module_path);
 void lucet_drop_module(LucetSandboxInstance *inst);
 
-uint32_t lucet_lookup_function(LucetSandboxInstance *inst,
-                                const char *fn_name);
+void* lucet_lookup_function(LucetSandboxInstance *inst,
+                            const char *fn_name);
 void lucet_run_function_return_void(LucetSandboxInstance *inst,
-                                    const char *fn_name, int argc,
+                                    void* func_ptr, int argc,
                                     LucetValue *argv);
 uint32_t lucet_run_function_return_u32(LucetSandboxInstance *inst,
-                                       const char *fn_name, int argc,
+                                       void* func_ptr, int argc,
                                        LucetValue *argv);
 uint64_t lucet_run_function_return_u64(LucetSandboxInstance *inst,
-                                       const char *fn_name, int argc,
+                                       void* func_ptr, int argc,
                                        LucetValue *argv);
 float lucet_run_function_return_f32(LucetSandboxInstance *inst,
-                                    const char *fn_name, int argc,
+                                    void* func_ptr, int argc,
                                     LucetValue *argv);
 double lucet_run_function_return_f64(LucetSandboxInstance *inst,
-                                     const char *fn_name, int argc,
+                                     void* func_ptr, int argc,
                                      LucetValue *argv);
 
 uintptr_t lucet_get_reserved_callback_slot_val(void *inst,
@@ -74,8 +74,9 @@ int32_t lucet_get_function_type_index(void *inst, LucetFunctionSignature csig);
 
 void *lucet_get_heap_base(LucetSandboxInstance *inst);
 size_t lucet_get_heap_size(LucetSandboxInstance *inst);
-void *lucet_get_unsandboxed_ptr(void *inst, uintptr_t sandboxed_ptr);
-uintptr_t lucet_get_sandboxed_ptr(void *inst, void *unsandboxed_ptr);
+void *lucet_get_unsandboxed_ptr(void *inst, uint32_t sandboxed_ptr);
+uint32_t lucet_get_sandboxed_ptr(void *inst, void *unsandboxed_ptr);
+uint32_t lucet_get_export_function_id(void *inst, void *unsandboxed_ptr);
 
 #ifdef __cplusplus
 }

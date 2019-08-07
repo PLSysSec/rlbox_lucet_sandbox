@@ -242,7 +242,7 @@ private:
   }
 
   template <typename T_FormalRet, typename T_ActualRet>
-  inline auto serialize_return_value(T_ActualRet arg) {
+  inline auto serialize_to_sandbox(T_ActualRet arg) {
     if constexpr (std::is_class_v<T_FormalRet>) {
       // structs returned as pointers into wasm memory/wasm stack
       auto ptr = reinterpret_cast<T_FormalRet *>(
@@ -302,8 +302,7 @@ private:
     // Callbacks are invoked through function pointers, cannot use std::forward
     // as we don't have caller context for T_Args, which means they are all
     // effectively passed by value
-    return func(
-        thread_data->sandbox->serialize_return_value<T_Args>(params)...);
+    return func(thread_data->sandbox->serialize_to_sandbox<T_Args>(params)...);
   }
 
   template <uint32_t N, typename T_Ret, typename... T_Args>
@@ -323,12 +322,42 @@ private:
     // as we don't have caller context for T_Args, which means they are all
     // effectively passed by value
     auto ret_val =
-        func(thread_data->sandbox->serialize_return_value<T_Args>(params)...);
+        func(thread_data->sandbox->serialize_to_sandbox<T_Args>(params)...);
     // Copy the return value back
     auto ret_ptr = reinterpret_cast<T_Ret *>(
         thread_data->sandbox->template impl_get_unsandboxed_pointer<T_Ret *>(
             ret));
     *ret_ptr = ret_val;
+  }
+
+  template <typename T_Ret, typename... T_Args>
+  inline T_PointerType get_lucet_type_index(
+      T_Ret (*/* dummy for template inference */)(T_Args...) = nullptr) const {
+    // Class return types as promoted to args
+    constexpr bool promoted = std::is_class_v<T_Ret>;
+    int32_t type_index;
+
+    if constexpr (promoted) {
+      LucetValueType ret_type = LucetValueType::LucetValueType_Void;
+      LucetValueType param_types[] = {
+          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type,
+          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
+      LucetFunctionSignature signature{
+          ret_type, sizeof(param_types) / sizeof(LucetValueType),
+          &(param_types[0])};
+      type_index = lucet_get_function_type_index(sandbox, signature);
+    } else {
+      LucetValueType ret_type =
+          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type;
+      LucetValueType param_types[] = {
+          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
+      LucetFunctionSignature signature{
+          ret_type, sizeof(param_types) / sizeof(LucetValueType),
+          &(param_types[0])};
+      type_index = lucet_get_function_type_index(sandbox, signature);
+    }
+
+    return type_index;
   }
 
 protected:
@@ -361,16 +390,47 @@ protected:
   template <typename T>
   inline void *impl_get_unsandboxed_pointer(T_PointerType p) const {
     if constexpr (std::is_function_v<std::remove_pointer_t<T>>) {
-      std::abort();
+      static_assert(lucet_detail::false_v<T>,
+              "No swizzling for a function pointer.");
     } else {
-      return lucet_get_unsandboxed_ptr(sandbox, static_cast<uintptr_t>(p));
+      return lucet_get_unsandboxed_ptr(sandbox, static_cast<uint32_t>(p));
     }
   }
 
   template <typename T>
   inline T_PointerType impl_get_sandboxed_pointer(const void *p) const {
     if constexpr (std::is_function_v<std::remove_pointer_t<T>>) {
-      std::abort();
+      // p is a pointer to a function internal to the lucet module
+      // we need to either
+      // 1) find the indirect function slot this is registered and return the
+      // slot number. For this we need to scan the full indirect function table,
+      // not just the portion we have reserved for callbacks.
+      // 2) in the scenario this function has not ever been listed as an
+      // indirect function, we need to register this like a normal callback.
+      // However, unlike callbacks, we will not require the user to unregister
+      // this. Instead, this permenantly takes up a callback slot.
+      LucetFunctionTable functionPointerTable =
+          lucet_get_function_pointer_table(sandbox);
+      std::lock_guard<std::mutex> lock(callback_table_mutex);
+
+      // Scenario 1 described above
+      ssize_t empty_slot = -1;
+      for (size_t i = 0; i < functionPointerTable.length; i++) {
+        if (functionPointerTable.data[i].rf == reinterpret_cast<uintptr_t>(p)) {
+          return static_cast<T_PointerType>(i);
+        } else if (functionPointerTable.data[i].rf == 0 && empty_slot == -1) {
+          // found an empty slot. Save it, as we may use it later.
+          empty_slot = i;
+        }
+      }
+
+      // Scenario 2 described above
+      T dummy = nullptr;
+      int32_t type_index = get_lucet_type_index(dummy);
+      functionPointerTable.data[empty_slot].ty = type_index;
+      functionPointerTable.data[empty_slot].rf = reinterpret_cast<uintptr_t>(p);
+      return empty_slot;
+
     } else {
       return static_cast<T_PointerType>(
           lucet_get_sandboxed_ptr(sandbox, const_cast<void *>(p)));
@@ -435,14 +495,13 @@ protected:
   }
 
   void *impl_lookup_symbol(const char *func_name) {
-    // just use the string itself as lucet does its own symbol resolution
-    return const_cast<void *>(reinterpret_cast<const void *>(func_name));
+    return lucet_lookup_function(sandbox, func_name);
   }
 
   template <typename T, typename T_Converted, typename... T_Args>
   auto impl_invoke_with_func_ptr(T_Converted *func_ptr, T_Args &&... params) {
     thread_data->sandbox = this;
-    const char *func_name = reinterpret_cast<const char *>(func_ptr);
+    void *func_ptr_void = reinterpret_cast<void *>(func_ptr);
     // Add one as the return value may require an arg slot for structs
     T_PointerType allocations[1 + sizeof...(params)];
     LucetValue args[1 + sizeof...(params)];
@@ -460,7 +519,7 @@ protected:
         typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type;
 
     if constexpr (std::is_void_v<T_Wasm_Ret>) {
-      lucet_run_function_return_void(sandbox, func_name, arg_length,
+      lucet_run_function_return_void(sandbox, func_ptr_void, arg_length,
                                      &(args[0]));
       for (size_t i = 0; i < alloc_length; i++) {
         impl_free_in_sandbox(allocations[i]);
@@ -470,23 +529,23 @@ protected:
 
       T_Wasm_Ret ret;
       if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
-        ret = lucet_run_function_return_u32(sandbox, func_name, arg_length,
+        ret = lucet_run_function_return_u32(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else if constexpr (std::is_same_v<T_Wasm_Ret, uint64_t>) {
-        ret = lucet_run_function_return_u64(sandbox, func_name, arg_length,
+        ret = lucet_run_function_return_u64(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else if constexpr (std::is_same_v<T_Wasm_Ret, float>) {
-        ret = lucet_run_function_return_f32(sandbox, func_name, arg_length,
+        ret = lucet_run_function_return_f32(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else if constexpr (std::is_same_v<T_Wasm_Ret, double>) {
-        ret = lucet_run_function_return_f64(sandbox, func_name, arg_length,
+        ret = lucet_run_function_return_f64(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else {
         static_assert(lucet_detail::false_v<T_Wasm_Ret>,
                       "Unknown invoke return type");
       }
 
-      auto serialized_ret = serialize_return_value<T_Ret>(ret);
+      auto serialized_ret = serialize_to_sandbox<T_Ret>(ret);
       // free only after serializing return, as return values such as structs
       // are returned as pointers which we must free
       for (size_t i = 0; i < alloc_length; i++) {
@@ -516,29 +575,7 @@ protected:
 
   template <typename T_Ret, typename... T_Args>
   inline T_PointerType impl_register_callback(void *key, void *callback) {
-    // Class return types as promoted to args
-    constexpr bool promoted = std::is_class_v<T_Ret>;
-    int32_t type_index;
-
-    if constexpr (promoted) {
-      LucetValueType ret_type = LucetValueType::LucetValueType_Void;
-      LucetValueType param_types[] = {
-          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type,
-          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
-      LucetFunctionSignature signature{
-          ret_type, sizeof(param_types) / sizeof(LucetValueType),
-          &(param_types[0])};
-      type_index = lucet_get_function_type_index(sandbox, signature);
-    } else {
-      LucetValueType ret_type =
-          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type;
-      LucetValueType param_types[] = {
-          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
-      LucetFunctionSignature signature{
-          ret_type, sizeof(param_types) / sizeof(LucetValueType),
-          &(param_types[0])};
-      type_index = lucet_get_function_type_index(sandbox, signature);
-    }
+    int32_t type_index = get_lucet_type_index<T_Ret, T_Args...>();
 
     dynamic_check(type_index != -1,
                   "Could not find lucet type for callback signature. This can "
@@ -565,7 +602,7 @@ protected:
             callback_slot_assignment[i] = slot_number;
           }
           void *chosen_interceptor;
-          if constexpr (promoted) {
+          if constexpr (std::is_class_v<T_Ret>) {
             chosen_interceptor = reinterpret_cast<void *>(
                 callback_interceptor_promoted<i, T_Ret, T_Args...>);
           } else {

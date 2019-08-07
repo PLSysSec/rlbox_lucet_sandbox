@@ -145,6 +145,7 @@ impl Into<Signature> for LucetFunctionSignature {
         let len = usize::try_from(self.parameter_cnt).unwrap();
         let vec = unsafe { Vec::from_raw_parts(self.parameters, len, len) };
         let p: Vec<ValueType> = vec.iter().map(|x| x.clone().into()).collect();
+        std::mem::forget(vec);
         Signature {
             params: p,
             ret_ty: self.ret.into(),

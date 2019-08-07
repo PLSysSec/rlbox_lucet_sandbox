@@ -4,6 +4,10 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <type_traits>
 #include <utility>
 
@@ -27,6 +31,21 @@ Ret helper(Ret (F::*)(Rest...) const);
 
 template <typename F> decltype(helper(&F::operator())) helper(F);
 } // namespace return_argument_detail
+
+// https://stackoverflow.com/questions/37602057/why-isnt-a-for-loop-a-compile-time-expression
+namespace compile_time_for_detail {
+template <std::size_t N> struct num { static const constexpr auto value = N; };
+
+template <class F, std::size_t... Is>
+inline void compile_time_for_helper(F func, std::index_sequence<Is...>) {
+  (func(num<Is>{}), ...);
+}
+} // namespace compile_time_for_detail
+
+template <std::size_t N, typename F> inline void compile_time_for(F func) {
+  compile_time_for_detail::compile_time_for_helper(
+      func, std::make_index_sequence<N>());
+}
 
 template <typename T>
 using return_argument =
@@ -94,6 +113,29 @@ private:
   LucetSandboxInstance *sandbox = nullptr;
   void *malloc_index = 0;
   void *free_index = 0;
+
+  static const size_t MAX_CALLBACKS = 128;
+  std::shared_mutex callback_mutex;
+  void *callback_unique_keys[MAX_CALLBACKS]{0};
+  void *callbacks[MAX_CALLBACKS]{0};
+  uint32_t callback_slot_assignment[MAX_CALLBACKS]{0};
+
+  using TableElementRef = LucetFunctionTableElement *;
+  struct FunctionTable {
+    TableElementRef elements[MAX_CALLBACKS];
+    uint32_t slot_number[MAX_CALLBACKS];
+  };
+  inline static std::mutex callback_table_mutex;
+  inline static std::map<void *, std::weak_ptr<FunctionTable>>
+      shared_callback_slots;
+  std::shared_ptr<FunctionTable> callback_slots = nullptr;
+
+  struct rlbox_lucet_sandbox_thread_local {
+    rlbox_lucet_sandbox *sandbox;
+    uint32_t last_callback_invoked;
+  };
+  static inline std::unique_ptr<rlbox_lucet_sandbox_thread_local> thread_data =
+      std::make_unique<rlbox_lucet_sandbox_thread_local>();
 
   void dynamic_check(bool success, const char *error_message) {
     if (!success) {
@@ -212,6 +254,83 @@ private:
     }
   }
 
+  inline void set_callbacks_slots_ref() {
+    LucetFunctionTable functionPointerTable =
+        lucet_get_function_pointer_table(sandbox);
+    void *key = functionPointerTable.data;
+
+    std::lock_guard<std::mutex> lock(callback_table_mutex);
+    std::weak_ptr<FunctionTable> slots = shared_callback_slots[key];
+
+    if (auto shared_slots = slots.lock()) {
+      // pointer exists
+      callback_slots = shared_slots;
+      return;
+    }
+
+    callback_slots = std::make_shared<FunctionTable>();
+
+    for (size_t i = 0; i < MAX_CALLBACKS; i++) {
+      uintptr_t reservedVal =
+          lucet_get_reserved_callback_slot_val(sandbox, i + 1);
+
+      for (size_t j = 0; j < functionPointerTable.length; j++) {
+        if (functionPointerTable.data[j].rf == reservedVal) {
+          functionPointerTable.data[j].rf = 0;
+          callback_slots->elements[i] = &(functionPointerTable.data[j]);
+          callback_slots->slot_number[i] = static_cast<uint32_t>(j);
+          break;
+        }
+      }
+    }
+
+    shared_callback_slots[key] = callback_slots;
+  }
+
+  template <uint32_t N, typename T_Ret, typename... T_Args>
+  static typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type
+  callback_interceptor(void * /* vmContext */,
+                       typename lucet_detail::convert_type_to_wasm_type<
+                           T_Args>::type... params) {
+    thread_data->last_callback_invoked = N;
+    using T_Func = T_Ret (*)(T_Args...);
+    T_Func func;
+    {
+      std::shared_lock lock(thread_data->sandbox->callback_mutex);
+      func = reinterpret_cast<T_Func>(thread_data->sandbox->callbacks[N]);
+    }
+    // Callbacks are invoked through function pointers, cannot use std::forward
+    // as we don't have caller context for T_Args, which means they are all
+    // effectively passed by value
+    return func(
+        thread_data->sandbox->serialize_return_value<T_Args>(params)...);
+  }
+
+  template <uint32_t N, typename T_Ret, typename... T_Args>
+  static void callback_interceptor_promoted(
+      void * /* vmContext */,
+      typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type ret,
+      typename lucet_detail::convert_type_to_wasm_type<
+          T_Args>::type... params) {
+    thread_data->last_callback_invoked = N;
+    using T_Func = T_Ret (*)(T_Args...);
+    T_Func func;
+    {
+      std::shared_lock lock(thread_data->sandbox->callback_mutex);
+      func = reinterpret_cast<T_Func>(thread_data->sandbox->callbacks[N]);
+    }
+    // Callbacks are invoked through function pointers, cannot use std::forward
+    // as we don't have caller context for T_Args, which means they are all
+    // effectively passed by value
+    auto ret_val =
+        func(thread_data->sandbox->serialize_return_value<T_Args>(params)...);
+    // Copy the return value back
+    auto ret_ptr = reinterpret_cast<T_Ret *>(
+        thread_data->sandbox->template impl_get_unsandboxed_pointer<T_Ret *>(
+            ret));
+    *ret_ptr = ret_val;
+  }
+
 protected:
   inline void impl_create_sandbox(const char *lucet_module_path) {
     dynamic_check(sandbox == nullptr, "Sandbox already initialized");
@@ -233,6 +352,8 @@ protected:
     // cache these for performance
     malloc_index = impl_lookup_symbol("malloc");
     free_index = impl_lookup_symbol("free");
+
+    set_callbacks_slots_ref();
   }
 
   inline void impl_destroy_sandbox() { lucet_drop_module(sandbox); }
@@ -320,6 +441,7 @@ protected:
 
   template <typename T, typename T_Converted, typename... T_Args>
   auto impl_invoke_with_func_ptr(T_Converted *func_ptr, T_Args &&... params) {
+    thread_data->sandbox = this;
     const char *func_name = reinterpret_cast<const char *>(func_ptr);
     // Add one as the return value may require an arg slot for structs
     T_PointerType allocations[1 + sizeof...(params)];
@@ -394,20 +516,100 @@ protected:
 
   template <typename T_Ret, typename... T_Args>
   inline T_PointerType impl_register_callback(void *key, void *callback) {
-    RLBOX_LUCET_UNUSED(key);
-    RLBOX_LUCET_UNUSED(callback);
-    std::abort();
+    // Class return types as promoted to args
+    constexpr bool promoted = std::is_class_v<T_Ret>;
+    int32_t type_index;
+
+    if constexpr (promoted) {
+      LucetValueType ret_type = LucetValueType::LucetValueType_Void;
+      LucetValueType param_types[] = {
+          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type,
+          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
+      LucetFunctionSignature signature{
+          ret_type, sizeof(param_types) / sizeof(LucetValueType),
+          &(param_types[0])};
+      type_index = lucet_get_function_type_index(sandbox, signature);
+    } else {
+      LucetValueType ret_type =
+          lucet_detail::convert_type_to_wasm_type<T_Ret>::lucet_type;
+      LucetValueType param_types[] = {
+          lucet_detail::convert_type_to_wasm_type<T_Args>::lucet_type...};
+      LucetFunctionSignature signature{
+          ret_type, sizeof(param_types) / sizeof(LucetValueType),
+          &(param_types[0])};
+      type_index = lucet_get_function_type_index(sandbox, signature);
+    }
+
+    dynamic_check(type_index != -1,
+                  "Could not find lucet type for callback signature. This can "
+                  "happen if you tried to register a callback whose signature "
+                  "does not correspond to any callbacks used in the library.");
+
+    bool found = false;
+    uint32_t slot_number = 0;
+
+    {
+      std::lock_guard<std::mutex> lock(callback_table_mutex);
+
+      // need a compile time for loop as we we need I to be a compile time value
+      // this is because we are setting the I'th callback ineterceptor
+      lucet_detail::compile_time_for<MAX_CALLBACKS>([&](auto I) {
+        constexpr auto i = I.value;
+        if (!found && callback_slots->elements[i]->rf == 0) {
+          found = true;
+          slot_number = callback_slots->slot_number[i];
+          {
+            std::unique_lock lock(callback_mutex);
+            callback_unique_keys[i] = key;
+            callbacks[i] = callback;
+            callback_slot_assignment[i] = slot_number;
+          }
+          void *chosen_interceptor;
+          if constexpr (promoted) {
+            chosen_interceptor = reinterpret_cast<void *>(
+                callback_interceptor_promoted<i, T_Ret, T_Args...>);
+          } else {
+            chosen_interceptor = reinterpret_cast<void *>(
+                callback_interceptor<i, T_Ret, T_Args...>);
+          }
+          callback_slots->elements[i]->ty = type_index;
+          callback_slots->elements[i]->rf =
+              reinterpret_cast<uintptr_t>(chosen_interceptor);
+        }
+      });
+    }
+
+    dynamic_check(found, "Run out of slots for callbacks");
+
+    return static_cast<T_PointerType>(slot_number);
   }
 
   static inline std::pair<rlbox_lucet_sandbox *, void *>
   impl_get_executed_callback_sandbox_and_key() {
-    std::abort();
+    auto sandbox = thread_data->sandbox;
+    auto callback_num = thread_data->last_callback_invoked;
+    void *key = sandbox->callback_unique_keys[callback_num];
+    return std::make_pair(sandbox, key);
   }
 
   template <typename T_Ret, typename... T_Args>
   inline void impl_unregister_callback(void *key) {
-    RLBOX_LUCET_UNUSED(key);
-    std::abort();
+    std::unique_lock lock(callback_mutex);
+    for (uint32_t i = 0; i < MAX_CALLBACKS; i++) {
+      if (callback_unique_keys[i] == key) {
+        callback_unique_keys[i] = nullptr;
+        callbacks[i] = nullptr;
+        uint32_t slot_number = callback_slot_assignment[i];
+        callback_slot_assignment[i] = 0;
+        lock.release();
+
+        std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
+        callback_slots->elements[slot_number]->rf = 0;
+        return;
+      }
+    }
+    dynamic_check(false,
+                  "Internal error: Could not find callback to unregister");
   }
 };
 

@@ -2,7 +2,8 @@ use crate::helpers::get_signatures;
 use crate::types::{Error, LucetSandboxInstance};
 
 use lucet_runtime::{DlModule, Limits, MmapRegion, Module, Region};
-use lucet_runtime_internals::module::ModuleInternal;
+use lucet_runtime_internals::{module::ModuleInternal};
+
 use lucet_wasi::WasiCtxBuilder;
 
 use std::ffi::{c_void, CStr};

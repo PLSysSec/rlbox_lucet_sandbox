@@ -32,6 +32,12 @@ Ret helper(Ret (F::*)(Rest...) const);
 template <typename F> decltype(helper(&F::operator())) helper(F);
 } // namespace return_argument_detail
 
+template <typename T>
+using return_argument =
+    decltype(return_argument_detail::helper(std::declval<T>()));
+
+///////////////////////////////////////////////////////////////
+
 // https://stackoverflow.com/questions/37602057/why-isnt-a-for-loop-a-compile-time-expression
 namespace compile_time_for_detail {
 template <std::size_t N> struct num { static const constexpr auto value = N; };
@@ -46,10 +52,6 @@ template <std::size_t N, typename F> inline void compile_time_for(F func) {
   compile_time_for_detail::compile_time_for_helper(
       func, std::make_index_sequence<N>());
 }
-
-template <typename T>
-using return_argument =
-    decltype(return_argument_detail::helper(std::declval<T>()));
 
 ///////////////////////////////////////////////////////////////
 
@@ -390,8 +392,14 @@ protected:
   template <typename T>
   inline void *impl_get_unsandboxed_pointer(T_PointerType p) const {
     if constexpr (std::is_function_v<std::remove_pointer_t<T>>) {
-      static_assert(lucet_detail::false_v<T>,
-              "No swizzling for a function pointer.");
+      LucetFunctionTable functionPointerTable =
+          lucet_get_function_pointer_table(sandbox);
+      if (p >= functionPointerTable.length) {
+        // Received out of range function pointer
+        return nullptr;
+      }
+      auto ret = functionPointerTable.data[p].rf;
+      return reinterpret_cast<void *>(static_cast<uintptr_t>(ret));
     } else {
       return lucet_get_unsandboxed_ptr(sandbox, static_cast<uint32_t>(p));
     }
@@ -509,8 +517,14 @@ protected:
                               std::forward<T_Args>(params)...);
 
     using T_Ret = lucet_detail::return_argument<T_Converted>;
-    constexpr size_t alloc_length =
-        std::is_class_v<T_Ret> + (std::is_class_v<T_Args> + ...);
+    constexpr size_t alloc_length = (std::is_class_v<T_Ret> ? 1 : 0) + [&](){
+      if constexpr (sizeof...(params) > 0){
+        return ((std::is_class_v<T_Args> ? 1 : 0) + ...);
+      } else {
+        return 0;
+      }
+    }();
+      
     constexpr size_t arg_length =
         sizeof...(params) + (std::is_class_v<T_Ret> ? 1 : 0);
 
@@ -528,7 +542,12 @@ protected:
     } else {
 
       T_Wasm_Ret ret;
-      if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
+      if constexpr (std::is_class_v<T_Ret>) {
+        lucet_run_function_return_void(sandbox, func_ptr_void, arg_length,
+                                       &(args[0]));
+        ret = allocations[0];
+      }
+      else if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
         ret = lucet_run_function_return_u32(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else if constexpr (std::is_same_v<T_Wasm_Ret, uint64_t>) {

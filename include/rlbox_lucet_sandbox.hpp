@@ -446,12 +446,15 @@ protected:
   }
 
   template <typename T>
-  static inline void *
-  impl_get_unsandboxed_pointer_no_ctx(T_PointerType p,
-                                      const void *example_unsandboxed_ptr) {
+  static inline void *impl_get_unsandboxed_pointer_no_ctx(
+      T_PointerType p, const void *example_unsandboxed_ptr,
+      rlbox_lucet_sandbox *(*expensive_sandbox_finder)(
+          const void *example_unsandboxed_ptr)) {
     if constexpr (std::is_function_v<std::remove_pointer_t<T>>) {
-      static_assert(lucet_detail::false_v<T>,
-                    "No context swizzling for a function pointer.");
+      // swizzling function pointers needs access to the function pointer tables
+      // and thus cannot be done without context
+      auto sandbox = expensive_sandbox_finder(example_unsandboxed_ptr);
+      return sandbox->impl_get_unsandboxed_pointer<T>(p);
     } else {
       // grab the memory base from the example_unsandboxed_ptr
       uintptr_t heap_base_mask =
@@ -466,12 +469,17 @@ protected:
 
   template <typename T>
   static inline T_PointerType impl_get_sandboxed_pointer_no_ctx(
-      const void *p, const void * /* example_unsandboxed_ptr */) {
+      const void *p, const void * example_unsandboxed_ptr,
+      rlbox_lucet_sandbox *(*expensive_sandbox_finder)(
+          const void *example_unsandboxed_ptr)) {
     if constexpr (std::is_function_v<std::remove_pointer_t<T>>) {
-      static_assert(lucet_detail::false_v<T>,
-                    "No context swizzling for a function pointer.");
+      // swizzling function pointers needs access to the function pointer tables
+      // and thus cannot be done without context
+      auto sandbox = expensive_sandbox_finder(example_unsandboxed_ptr);
+      return sandbox->impl_get_sandboxed_pointer<T>(p);
     } else {
       // Just clear the memory base to leave the offset
+      RLBOX_LUCET_UNUSED(example_unsandboxed_ptr);
       uintptr_t ret = reinterpret_cast<uintptr_t>(p) &
                       std::numeric_limits<T_PointerType>::max();
       return static_cast<T_PointerType>(ret);
@@ -517,14 +525,14 @@ protected:
                               std::forward<T_Args>(params)...);
 
     using T_Ret = lucet_detail::return_argument<T_Converted>;
-    constexpr size_t alloc_length = (std::is_class_v<T_Ret> ? 1 : 0) + [&](){
-      if constexpr (sizeof...(params) > 0){
+    constexpr size_t alloc_length = (std::is_class_v<T_Ret> ? 1 : 0) + [&]() {
+      if constexpr (sizeof...(params) > 0) {
         return ((std::is_class_v<T_Args> ? 1 : 0) + ...);
       } else {
         return 0;
       }
     }();
-      
+
     constexpr size_t arg_length =
         sizeof...(params) + (std::is_class_v<T_Ret> ? 1 : 0);
 
@@ -546,8 +554,7 @@ protected:
         lucet_run_function_return_void(sandbox, func_ptr_void, arg_length,
                                        &(args[0]));
         ret = allocations[0];
-      }
-      else if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
+      } else if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
         ret = lucet_run_function_return_u32(sandbox, func_ptr_void, arg_length,
                                             &(args[0]));
       } else if constexpr (std::is_same_v<T_Wasm_Ret, uint64_t>) {

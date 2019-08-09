@@ -1,19 +1,11 @@
 cmake_minimum_required(VERSION 3.11)
 
-SET(CMAKE_C_COMPILER /usr/bin/clang)
-SET(CMAKE_CXX_COMPILER /usr/bin/clang++)
-SET(CMAKE_BUILD_TYPE Release)
-
 if(NOT DEFINED ENV{rlbox_SOURCE_DIR})
-message(FATAL_ERROR "Set rlbox_SOURCE_DIR environment variable")
+  message(FATAL_ERROR "Set rlbox_SOURCE_DIR environment variable")
 endif()
 
-if(NOT DEFINED ENV{WASM_LD_PATH})
-message(FATAL_ERROR "Set WASM_LD_PATH environment variable")
-endif()
-
-if(NOT DEFINED ENV{WASI_SYSROOT})
-message(FATAL_ERROR "Set WASI_SYSROOT environment variable")
+if(NOT DEFINED ENV{wasiclang_SOURCE_DIR})
+  message(FATAL_ERROR "Set wasiclang_SOURCE_DIR environment variable")
 endif()
 
 if(NOT DEFINED ENV{LUCET_WASI_DIR})
@@ -25,13 +17,17 @@ message(FATAL_ERROR "Set LUCET_DIR environment variable")
 endif()
 
 set(rlbox_SOURCE_DIR $ENV{rlbox_SOURCE_DIR})
-set(WASM_LD_PATH $ENV{WASM_LD_PATH})
-set(WASI_SYSROOT $ENV{WASI_SYSROOT})
+set(wasiclang_SOURCE_DIR $ENV{wasiclang_SOURCE_DIR})
 set(LUCET_WASI_DIR $ENV{LUCET_WASI_DIR})
 set(LUCET_DIR $ENV{LUCET_DIR})
 
+set(CMAKE_C_COMPILER ${wasiclang_SOURCE_DIR}/opt/wasi-sdk/bin/clang)
+set(CMAKE_CXX_COMPILER ${wasiclang_SOURCE_DIR}/opt/wasi-sdk/bin/clang++)
+set(CMAKE_BUILD_TYPE Release)
+
 # Apply settings suitable for wasm module compilation
-set(CMAKE_C_FLAGS " -B${WASM_LD_PATH} --target=wasm32-wasi --sysroot ${WASI_SYSROOT} -Wl,--export-all ")
+set(CMAKE_C_FLAGS "--sysroot ${wasiclang_SOURCE_DIR}/opt/wasi-sdk/share/wasi-sysroot/")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--export-all")
 
 add_executable(glue_lib_lucet.wasm
                lucet_sandbox_wrapper.c

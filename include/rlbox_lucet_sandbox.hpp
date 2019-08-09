@@ -16,6 +16,11 @@
 
 namespace rlbox {
 
+namespace detail {
+  // relying on the dynamic check settings (exception vs abort) in the rlbox lib
+  inline void dynamic_check(bool check, const char* const msg);
+}
+
 namespace lucet_detail {
 
   template<typename T>
@@ -162,14 +167,6 @@ private:
   };
   static inline std::unique_ptr<rlbox_lucet_sandbox_thread_local> thread_data =
     std::make_unique<rlbox_lucet_sandbox_thread_local>();
-
-  void dynamic_check(bool success, const char* error_message)
-  {
-    if (!success) {
-      std::cout << error_message << "\n";
-      abort();
-    }
-  }
 
   template<typename T_Formal, typename T_Actual>
   inline LucetValue serialize_arg(T_PointerType* allocations, T_Actual arg)
@@ -409,9 +406,9 @@ private:
 protected:
   inline void impl_create_sandbox(const char* lucet_module_path)
   {
-    dynamic_check(sandbox == nullptr, "Sandbox already initialized");
+    detail::dynamic_check(sandbox == nullptr, "Sandbox already initialized");
     sandbox = lucet_load_module(lucet_module_path);
-    dynamic_check(sandbox != nullptr, "Sandbox could not be created");
+    detail::dynamic_check(sandbox != nullptr, "Sandbox could not be created");
 
     auto heap_base = reinterpret_cast<uintptr_t>(lucet_get_heap_base(sandbox));
     // Check that the address space is larger than the sandbox heap i.e. 4GB
@@ -422,7 +419,7 @@ protected:
     // impl_get_unsandboxed_pointer_no_ctx and impl_get_sandboxed_pointer_no_ctx
     // below rely on this.
     uintptr_t heap_offset_mask = std::numeric_limits<T_PointerType>::max();
-    dynamic_check((heap_base & heap_offset_mask) == 0,
+    detail::dynamic_check((heap_base & heap_offset_mask) == 0,
                   "Sandbox heap not aligned to 4GB");
 
     // cache these for performance
@@ -640,7 +637,7 @@ protected:
 
   inline T_PointerType impl_malloc_in_sandbox(size_t size)
   {
-    dynamic_check(size <= std::numeric_limits<uint32_t>::max(),
+    detail::dynamic_check(size <= std::numeric_limits<uint32_t>::max(),
                   "Attempting to malloc more than the heap size");
     using T_Func = void*(size_t);
     using T_Converted = T_PointerType(uint32_t);
@@ -663,7 +660,7 @@ protected:
   {
     int32_t type_index = get_lucet_type_index<T_Ret, T_Args...>();
 
-    dynamic_check(type_index != -1,
+    detail::dynamic_check(type_index != -1,
                   "Could not find lucet type for callback signature. This can "
                   "happen if you tried to register a callback whose signature "
                   "does not correspond to any callbacks used in the library.");
@@ -702,7 +699,7 @@ protected:
       });
     }
 
-    dynamic_check(found, "Run out of slots for callbacks");
+    detail::dynamic_check(found, "Run out of slots for callbacks");
 
     return static_cast<T_PointerType>(slot_number);
   }
@@ -733,7 +730,7 @@ protected:
         return;
       }
     }
-    dynamic_check(false,
+    detail::dynamic_check(false,
                   "Internal error: Could not find callback to unregister");
   }
 };

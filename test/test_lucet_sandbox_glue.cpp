@@ -8,7 +8,7 @@
 #define TestType rlbox::rlbox_lucet_sandbox
 
 #ifndef GLUE_LIB_LUCET_PATH
-#error "Missing definition for GLUE_LIB_LUCET_PATH"
+#  error "Missing definition for GLUE_LIB_LUCET_PATH"
 #endif
 
 // NOLINTNEXTLINE

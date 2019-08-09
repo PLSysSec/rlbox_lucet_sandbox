@@ -15,14 +15,12 @@ option(WERR "Enable warnings as errors" OFF)
 
 if(MSVC)
   add_compile_options(/W4)
-  if (WERR)
+  if(WERR)
     add_compile_options(/WX)
   endif()
 else()
-  add_compile_options(-Wall
-                      -Wextra
-                      -pedantic)
-  if (WERR)
+  add_compile_options(-Wall -Wextra -pedantic)
+  if(WERR)
     add_compile_options(-Werror)
   endif()
 endif()
@@ -48,7 +46,13 @@ file(GLOB_RECURSE
      test/*.cc
      test/*.hh
      test/*.ii
-     test/*.[CHI])
+     test/*.[CHI]
+     c_src/*.[chi]pp
+     c_src/*.[chi]xx
+     c_src/*.cc
+     c_src/*.hh
+     c_src/*.ii
+     c_src/*.[CHI])
 
 find_program(CLANG_FORMAT "clang-format")
 if(CLANG_FORMAT)
@@ -72,10 +76,9 @@ if(NOT catch2_POLULATED)
   FetchContent_Populate(rlbox)
 endif()
 
-FetchContent_Declare(
-  catch2
-  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG v2.9.1)
+FetchContent_Declare(catch2
+                     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+                     GIT_TAG v2.9.1)
 FetchContent_GetProperties(catch2)
 if(NOT catch2_POLULATED)
   FetchContent_Populate(catch2)
@@ -86,7 +89,9 @@ list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/contrib")
 
 FetchContent_Declare(
   wasiclang
-  URL https://github.com/CraneStation/wasi-sdk/releases/download/wasi-sdk-6/wasi-sdk-6.0-linux.tar.gz)
+  URL
+    https://github.com/CraneStation/wasi-sdk/releases/download/wasi-sdk-6/wasi-sdk-6.0-linux.tar.gz
+  )
 FetchContent_GetProperties(wasiclang)
 if(NOT wasiclang_POLULATED)
   FetchContent_Populate(wasiclang)
@@ -104,7 +109,9 @@ endif()
 find_program(CARGO "cargo")
 if(!CARGO)
   message(
-    FATAL_ERROR "Could not find cargo. Please install cargo as it is needed to build rust libraries.")
+    FATAL_ERROR
+      "Could not find cargo. Please install cargo as it is needed to build rust libraries."
+    )
 endif()
 
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")
@@ -112,15 +119,15 @@ set(LUCET_PATH "${LUCET_DIR}/lucetc")
 file(GLOB_RECURSE LUCET_SOURCE_FILES ${mod_lucet_SOURCE_DIR}/*.rs)
 
 add_custom_command(OUTPUT ${LUCET_PATH}
-                   DEPENDS ${LUCET_SOURCE_FILES} ${mod_lucet_SOURCE_DIR}/Cargo.toml
-                   COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo ${CARGO}
+                   DEPENDS ${LUCET_SOURCE_FILES}
+                           ${mod_lucet_SOURCE_DIR}/Cargo.toml
+                   COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
+                           ${CARGO}
                            build
                            --release
                    WORKING_DIRECTORY ${mod_lucet_SOURCE_DIR}
                    COMMENT "Building customized lucet compiler")
-add_custom_target(lucet_release ALL
-                  DEPENDS ${LUCET_PATH})
-
+add_custom_target(lucet_release ALL DEPENDS ${LUCET_PATH})
 
 file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 

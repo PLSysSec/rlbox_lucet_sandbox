@@ -49,7 +49,7 @@ LDFLAGS=-Wl,--export-all                                                       \
 make
 ```
 
-- Assuming the above command produced the wasm module `libFoo`, compile this to an ELF shared libaray using the modified lucetc compiler as shown below.
+- Assuming the above command produced the wasm module `libFoo`, compile this to an ELF shared library using the modified lucetc compiler as shown below.
 
 ```bash
 build/_deps/lucet/target/release/lucetc                   \
@@ -86,19 +86,8 @@ g++ -std=c++17 example.cpp -o example -I build/_deps/rlbox-src/code/include -I i
 
 ## Contributing Code
 
-1. To contribute code, it is recommended you treat warnings as errors during
-development. Also, you probably want to use the debug build. To do this, adjust
-your build settings as shown below
-
-```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -DWERR=ON -S . -B ./build
-```
-
-2. After making changes to the source, add any new required tests and run all
-tests as described earlier.
-
-3. To make sure all code/docs are formatted with, we use clang-tidy.
-Install using:
+1. To contribute code, it is recommended you install clang-tidy which the build
+uses if available. Install using:
 
    On Ubuntu:
 ```bash
@@ -109,9 +98,32 @@ sudo apt install clang-tidy
 sudo pacman -S clang-tidy
 ```
 
-4. Format code with the format-source target:
+2. It is recommended you treat warnings as errors during development. Also, you
+probably want to use the debug build. To do this, adjust your build settings as
+shown below
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug -DWERR=ON -S . -B ./build
+```
+
+3. After making changes to the source, add any new required tests and run all
+tests as described earlier.
+
+4. To make sure all code/docs are formatted with, we use clang-format.
+Install using:
+
+   On Ubuntu:
+```bash
+sudo apt install clang-format
+```
+   On Arch Linux:
+```bash
+sudo pacman -S clang-format
+```
+
+5. Format code with the format-source target:
 ```bash
 cmake --build ./build --target format-source
 ```
 
-5. Submit the pull request.
+6. Submit the pull request.

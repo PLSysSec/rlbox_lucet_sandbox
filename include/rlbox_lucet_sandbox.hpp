@@ -140,6 +140,7 @@ public:
 
 private:
   LucetSandboxInstance* sandbox = nullptr;
+  uintptr_t heap_base;
   void* malloc_index = 0;
   void* free_index = 0;
 
@@ -410,7 +411,7 @@ protected:
     sandbox = lucet_load_module(lucet_module_path);
     detail::dynamic_check(sandbox != nullptr, "Sandbox could not be created");
 
-    auto heap_base = reinterpret_cast<uintptr_t>(lucet_get_heap_base(sandbox));
+    heap_base = reinterpret_cast<uintptr_t>(impl_get_memory_location());
     // Check that the address space is larger than the sandbox heap i.e. 4GB
     // sandbox heap, host has to have more than 4GB
     static_assert(sizeof(uintptr_t) > sizeof(T_PointerType));
@@ -444,7 +445,7 @@ protected:
       auto ret = functionPointerTable.data[p].rf;
       return reinterpret_cast<void*>(static_cast<uintptr_t>(ret));
     } else {
-      return lucet_get_unsandboxed_ptr(sandbox, static_cast<uint32_t>(p));
+      return reinterpret_cast<void*>(heap_base + p);
     }
   }
 
@@ -484,8 +485,7 @@ protected:
       return empty_slot;
 
     } else {
-      return static_cast<T_PointerType>(
-        lucet_get_sandboxed_ptr(sandbox, const_cast<void*>(p)));
+      return static_cast<T_PointerType>(reinterpret_cast<uintptr_t>(p));
     }
   }
 
@@ -506,9 +506,9 @@ protected:
       uintptr_t heap_base_mask =
         std::numeric_limits<uintptr_t>::max() &
         ~(static_cast<uintptr_t>(std::numeric_limits<T_PointerType>::max()));
-      uintptr_t heap_base =
+      uintptr_t computed_heap_base =
         reinterpret_cast<uintptr_t>(example_unsandboxed_ptr) & heap_base_mask;
-      uintptr_t ret = heap_base | p;
+      uintptr_t ret = computed_heap_base | p;
       return reinterpret_cast<void*>(ret);
     }
   }
@@ -544,7 +544,6 @@ protected:
 
   inline bool impl_is_pointer_in_sandbox_memory(const void* p)
   {
-    auto heap_base = reinterpret_cast<uintptr_t>(impl_get_memory_location());
     size_t length = impl_get_total_memory();
     uintptr_t p_val = reinterpret_cast<uintptr_t>(p);
     return p_val >= heap_base && p_val < (heap_base + length);

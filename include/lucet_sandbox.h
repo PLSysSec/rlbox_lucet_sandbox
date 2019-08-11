@@ -74,8 +74,6 @@ int32_t lucet_get_function_type_index(void *inst, LucetFunctionSignature csig);
 
 void *lucet_get_heap_base(LucetSandboxInstance *inst);
 size_t lucet_get_heap_size(LucetSandboxInstance *inst);
-void *lucet_get_unsandboxed_ptr(void *inst, uint32_t sandboxed_ptr);
-uint32_t lucet_get_sandboxed_ptr(void *inst, void *unsandboxed_ptr);
 uint32_t lucet_get_export_function_id(void *inst, void *unsandboxed_ptr);
 
 #ifdef __cplusplus

@@ -85,10 +85,6 @@ fn lucet_run_function_helper(
 ) -> UntypedRetVal {
     let inst = unsafe { &mut *(inst_ptr as *mut LucetSandboxInstance) };
     let func = FunctionPointer::from_usize(func_ptr as usize);
-    let func_handle = inst
-        .instance_handle
-        .module()
-        .function_handle_from_ptr(func);
 
     let args = if argc == 0 {
         vec![]
@@ -99,7 +95,7 @@ fn lucet_run_function_helper(
             .collect()
     };
 
-    let ret = inst.instance_handle.run_func(func_handle, &args);
+    let ret = inst.instance_handle.unsafe_run_func_fast(func, &args);
     match &ret {
         Err(e) => {
             println!("Error {:?}!", e);

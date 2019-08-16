@@ -166,8 +166,9 @@ private:
     rlbox_lucet_sandbox* sandbox;
     uint32_t last_callback_invoked;
   };
-  static inline std::unique_ptr<rlbox_lucet_sandbox_thread_local> thread_data =
-    std::make_unique<rlbox_lucet_sandbox_thread_local>();
+
+  thread_local static inline rlbox_lucet_sandbox_thread_local thread_data{ 0,
+                                                                           0 };
 
   template<typename T_Formal, typename T_Actual>
   inline LucetValue serialize_arg(T_PointerType* allocations, T_Actual arg)
@@ -332,17 +333,17 @@ private:
     void* /* vmContext */,
     typename lucet_detail::convert_type_to_wasm_type<T_Args>::type... params)
   {
-    thread_data->last_callback_invoked = N;
+    thread_data.last_callback_invoked = N;
     using T_Func = T_Ret (*)(T_Args...);
     T_Func func;
     {
-      std::shared_lock lock(thread_data->sandbox->callback_mutex);
-      func = reinterpret_cast<T_Func>(thread_data->sandbox->callbacks[N]);
+      std::shared_lock lock(thread_data.sandbox->callback_mutex);
+      func = reinterpret_cast<T_Func>(thread_data.sandbox->callbacks[N]);
     }
     // Callbacks are invoked through function pointers, cannot use std::forward
     // as we don't have caller context for T_Args, which means they are all
     // effectively passed by value
-    return func(thread_data->sandbox->serialize_to_sandbox<T_Args>(params)...);
+    return func(thread_data.sandbox->serialize_to_sandbox<T_Args>(params)...);
   }
 
   template<uint32_t N, typename T_Ret, typename... T_Args>
@@ -351,21 +352,21 @@ private:
     typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type ret,
     typename lucet_detail::convert_type_to_wasm_type<T_Args>::type... params)
   {
-    thread_data->last_callback_invoked = N;
+    thread_data.last_callback_invoked = N;
     using T_Func = T_Ret (*)(T_Args...);
     T_Func func;
     {
-      std::shared_lock lock(thread_data->sandbox->callback_mutex);
-      func = reinterpret_cast<T_Func>(thread_data->sandbox->callbacks[N]);
+      std::shared_lock lock(thread_data.sandbox->callback_mutex);
+      func = reinterpret_cast<T_Func>(thread_data.sandbox->callbacks[N]);
     }
     // Callbacks are invoked through function pointers, cannot use std::forward
     // as we don't have caller context for T_Args, which means they are all
     // effectively passed by value
     auto ret_val =
-      func(thread_data->sandbox->serialize_to_sandbox<T_Args>(params)...);
+      func(thread_data.sandbox->serialize_to_sandbox<T_Args>(params)...);
     // Copy the return value back
     auto ret_ptr = reinterpret_cast<T_Ret*>(
-      thread_data->sandbox->template impl_get_unsandboxed_pointer<T_Ret*>(ret));
+      thread_data.sandbox->template impl_get_unsandboxed_pointer<T_Ret*>(ret));
     *ret_ptr = ret_val;
   }
 
@@ -421,7 +422,7 @@ protected:
     // below rely on this.
     uintptr_t heap_offset_mask = std::numeric_limits<T_PointerType>::max();
     detail::dynamic_check((heap_base & heap_offset_mask) == 0,
-                  "Sandbox heap not aligned to 4GB");
+                          "Sandbox heap not aligned to 4GB");
 
     // cache these for performance
     malloc_index = impl_lookup_symbol("malloc");
@@ -569,7 +570,7 @@ protected:
   template<typename T, typename T_Converted, typename... T_Args>
   auto impl_invoke_with_func_ptr(T_Converted* func_ptr, T_Args&&... params)
   {
-    thread_data->sandbox = this;
+    thread_data.sandbox = this;
     void* func_ptr_void = reinterpret_cast<void*>(func_ptr);
     // Add one as the return value may require an arg slot for structs
     T_PointerType allocations[1 + sizeof...(params)];
@@ -637,7 +638,7 @@ protected:
   inline T_PointerType impl_malloc_in_sandbox(size_t size)
   {
     detail::dynamic_check(size <= std::numeric_limits<uint32_t>::max(),
-                  "Attempting to malloc more than the heap size");
+                          "Attempting to malloc more than the heap size");
     using T_Func = void*(size_t);
     using T_Converted = T_PointerType(uint32_t);
     T_PointerType ret = impl_invoke_with_func_ptr<T_Func, T_Converted>(
@@ -659,10 +660,11 @@ protected:
   {
     int32_t type_index = get_lucet_type_index<T_Ret, T_Args...>();
 
-    detail::dynamic_check(type_index != -1,
-                  "Could not find lucet type for callback signature. This can "
-                  "happen if you tried to register a callback whose signature "
-                  "does not correspond to any callbacks used in the library.");
+    detail::dynamic_check(
+      type_index != -1,
+      "Could not find lucet type for callback signature. This can "
+      "happen if you tried to register a callback whose signature "
+      "does not correspond to any callbacks used in the library.");
 
     bool found = false;
     uint32_t slot_number = 0;
@@ -706,8 +708,8 @@ protected:
   static inline std::pair<rlbox_lucet_sandbox*, void*>
   impl_get_executed_callback_sandbox_and_key()
   {
-    auto sandbox = thread_data->sandbox;
-    auto callback_num = thread_data->last_callback_invoked;
+    auto sandbox = thread_data.sandbox;
+    auto callback_num = thread_data.last_callback_invoked;
     void* key = sandbox->callback_unique_keys[callback_num];
     return std::make_pair(sandbox, key);
   }
@@ -729,8 +731,8 @@ protected:
         return;
       }
     }
-    detail::dynamic_check(false,
-                  "Internal error: Could not find callback to unregister");
+    detail::dynamic_check(
+      false, "Internal error: Could not find callback to unregister");
   }
 };
 

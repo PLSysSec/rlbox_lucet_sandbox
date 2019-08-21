@@ -7,10 +7,10 @@ edition = "2018"
 [dependencies]
 failure = "0.1.5"                    # Experimental error handling abstraction.
 goblin = "0.0.24"                    # An impish, cross-platform, ELF, Mach-o, and PE binary parsing and loading crate
-lucet-wasi = { path = "./build/_deps/mod_lucet-src/lucet-wasi" }
-lucet-runtime = { path = "./build/_deps/mod_lucet-src/lucet-runtime" }
-lucet-runtime-internals = { path = "./build/_deps/mod_lucet-src/lucet-runtime/lucet-runtime-internals" }
-lucet-module-data = { path = "./build/_deps/mod_lucet-src/lucet-module-data" }
+lucet-wasi = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
+lucet-runtime = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
+lucet-runtime-internals = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
+lucet-module-data = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 
 [lib]
 name = "rlbox_lucet_sandbox"

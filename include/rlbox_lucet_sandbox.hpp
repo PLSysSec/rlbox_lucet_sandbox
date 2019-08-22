@@ -724,7 +724,7 @@ protected:
         callbacks[i] = nullptr;
         uint32_t slot_number = callback_slot_assignment[i];
         callback_slot_assignment[i] = 0;
-        lock.release();
+        lock.unlock();
 
         std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
         callback_slots->elements[slot_number]->rf = 0;

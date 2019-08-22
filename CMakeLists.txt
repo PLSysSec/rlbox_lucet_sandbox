@@ -116,7 +116,7 @@ endif()
 
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")
 set(LUCET_PATH "${LUCET_DIR}/lucetc")
-file(GLOB_RECURSE LUCET_SOURCE_FILES ${mod_lucet_SOURCE_DIR}/*.rs)
+file(GLOB_RECURSE LUCET_SOURCE_FILES ${mod_lucet_SOURCE_DIR}/*.rs ${mod_lucet_SOURCE_DIR}/*.S)
 
 add_custom_command(OUTPUT ${LUCET_PATH}
                    DEPENDS ${LUCET_SOURCE_FILES}
@@ -137,7 +137,7 @@ file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 set(RUST_LIB_DEBUG_PATH
     "${CMAKE_BINARY_DIR}/cargo/debug/librlbox_lucet_sandbox.so")
 add_custom_command(OUTPUT ${RUST_LIB_DEBUG_PATH}
-                   DEPENDS ${RUST_SOURCE_FILES} Cargo.toml
+                   DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo ${CARGO}
                            build
                    COMMENT "Building librlbox_lucet_sandbox debug")
@@ -147,7 +147,7 @@ add_custom_target(lucet_sandbox_rustlib_debug ALL
 set(RUST_LIB_RELEASE_PATH
     "${CMAKE_BINARY_DIR}/cargo/release/librlbox_lucet_sandbox.so")
 add_custom_command(OUTPUT ${RUST_LIB_RELEASE_PATH}
-                   DEPENDS ${RUST_SOURCE_FILES}
+                   DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
                            ${CARGO}
                            build

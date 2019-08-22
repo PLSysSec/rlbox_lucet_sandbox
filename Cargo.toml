@@ -5,8 +5,8 @@ authors = ["shravanrn@gmail.com <shravanrn@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-failure = "0.1.5"                    # Experimental error handling abstraction.
-goblin = "0.0.24"                    # An impish, cross-platform, ELF, Mach-o, and PE binary parsing and loading crate
+failure = ">=0.1.3"                    # Experimental error handling abstraction.
+goblin = ">=0.0.17"                    # An impish, cross-platform, ELF, Mach-o, and PE binary parsing and loading crate
 lucet-wasi = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 lucet-runtime = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 lucet-runtime-internals = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }

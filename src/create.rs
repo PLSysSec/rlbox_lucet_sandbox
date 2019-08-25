@@ -1,4 +1,3 @@
-use crate::helpers::get_signatures;
 use crate::types::{Error, LucetSandboxInstance};
 
 use lucet_runtime::{DlModule, Limits, MmapRegion, Module, Region};
@@ -65,6 +64,8 @@ fn lucet_load_module_helper(module_path: &String) -> Result<LucetSandboxInstance
         },
     )?;
 
+    let sig = module.get_signatures().to_vec();
+
     // put the path to the module on the front for argv[0]
     let ctx = WasiCtxBuilder::new()
         .args(&[&module_path])
@@ -79,7 +80,7 @@ fn lucet_load_module_helper(module_path: &String) -> Result<LucetSandboxInstance
     let opaque_instance = LucetSandboxInstance {
         region: region,
         instance_handle: instance_handle,
-        signatures: get_signatures(&module_path)?,
+        signatures: sig,
     };
 
     return Ok(opaque_instance);

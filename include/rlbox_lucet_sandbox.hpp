@@ -479,6 +479,13 @@ protected:
       }
 
       // Scenario 2 described above
+      detail::dynamic_check(
+        empty_slot != -1,
+        "Could not find an empty slot in sandbox function table. This would "
+        "happen if you have registered too many callbacks, or unsandboxed "
+        "too many function pointers. You can file a bug if you want to "
+        "increase the maximum allowed callbacks or unsadnboxed functions "
+        "pointers");
       T dummy = nullptr;
       int32_t type_index = get_lucet_type_index(dummy);
       functionPointerTable.data[empty_slot].ty = type_index;
@@ -700,7 +707,12 @@ protected:
       });
     }
 
-    detail::dynamic_check(found, "Run out of slots for callbacks");
+    detail::dynamic_check(found,
+      "Could not find an empty slot in sandbox function table. This would "
+      "happen if you have registered too many callbacks, or unsandboxed "
+      "too many function pointers. You can file a bug if you want to "
+      "increase the maximum allowed callbacks or unsadnboxed functions "
+      "pointers");
 
     return static_cast<T_PointerType>(slot_number);
   }

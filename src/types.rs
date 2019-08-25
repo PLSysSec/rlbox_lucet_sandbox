@@ -18,7 +18,6 @@ pub enum Error {
     WasiError(failure::Error),
     LucetRuntimeError(lucet_runtime_internals::error::Error),
     LucetModuleError(lucet_module_data::Error),
-    LucetRLBoxError(&'static str),
 }
 
 impl From<goblin::error::Error> for Error {

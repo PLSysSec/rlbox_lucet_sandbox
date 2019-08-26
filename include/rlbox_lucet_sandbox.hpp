@@ -8,11 +8,29 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
+// RLBox allows applications to provide a custom shared lock implementation
+#ifndef rlbox_use_custom_shared_lock
+#  include <shared_mutex>
+#endif
 #include <type_traits>
 #include <utility>
 
 #define RLBOX_LUCET_UNUSED(...) (void)__VA_ARGS__
+
+// Use the same convention as rlbox to allow applications to customize the shared lock
+#ifndef rlbox_use_custom_shared_lock
+#  define rlbox_shared_lock(name) std::shared_timed_mutex name
+#  define rlbox_acquire_shared_guard(name, ...)                                \
+    std::shared_lock<std::shared_timed_mutex> name(__VA_ARGS__)
+#  define rlbox_acquire_unique_guard(name, ...)                                \
+    std::unique_lock<std::shared_timed_mutex> name(__VA_ARGS__)
+#else
+#  if !defined(rlbox_shared_lock) || !defined(rlbox_acquire_shared_guard) ||   \
+    !defined(rlbox_acquire_unique_guard)
+#    error                                                                     \
+      "rlbox_use_custom_shared_lock defined but missing definitions for rlbox_shared_lock, rlbox_acquire_shared_guard, rlbox_acquire_unique_guard"
+#  endif
+#endif
 
 namespace rlbox {
 
@@ -145,7 +163,7 @@ private:
   void* free_index = 0;
 
   static const size_t MAX_CALLBACKS = 128;
-  std::shared_mutex callback_mutex;
+  rlbox_shared_lock(callback_mutex);
   void* callback_unique_keys[MAX_CALLBACKS]{ 0 };
   void* callbacks[MAX_CALLBACKS]{ 0 };
   uint32_t callback_slot_assignment[MAX_CALLBACKS]{ 0 };
@@ -337,7 +355,7 @@ private:
     using T_Func = T_Ret (*)(T_Args...);
     T_Func func;
     {
-      std::shared_lock lock(thread_data.sandbox->callback_mutex);
+      rlbox_acquire_shared_guard(lock, thread_data.sandbox->callback_mutex);
       func = reinterpret_cast<T_Func>(thread_data.sandbox->callbacks[N]);
     }
     // Callbacks are invoked through function pointers, cannot use std::forward
@@ -356,7 +374,7 @@ private:
     using T_Func = T_Ret (*)(T_Args...);
     T_Func func;
     {
-      std::shared_lock lock(thread_data.sandbox->callback_mutex);
+      rlbox_acquire_shared_guard(lock, thread_data.sandbox->callback_mutex);
       func = reinterpret_cast<T_Func>(thread_data.sandbox->callbacks[N]);
     }
     // Callbacks are invoked through function pointers, cannot use std::forward
@@ -687,7 +705,7 @@ protected:
           found = true;
           slot_number = callback_slots->slot_number[i];
           {
-            std::unique_lock lock(callback_mutex);
+            rlbox_acquire_unique_guard(lock, callback_mutex);
             callback_unique_keys[i] = key;
             callbacks[i] = callback;
             callback_slot_assignment[i] = slot_number;
@@ -729,7 +747,7 @@ protected:
   template<typename T_Ret, typename... T_Args>
   inline void impl_unregister_callback(void* key)
   {
-    std::unique_lock lock(callback_mutex);
+    rlbox_acquire_unique_guard(lock, callback_mutex);
     for (uint32_t i = 0; i < MAX_CALLBACKS; i++) {
       if (callback_unique_keys[i] == key) {
         callback_unique_keys[i] = nullptr;

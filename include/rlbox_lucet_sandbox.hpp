@@ -17,7 +17,8 @@
 
 #define RLBOX_LUCET_UNUSED(...) (void)__VA_ARGS__
 
-// Use the same convention as rlbox to allow applications to customize the shared lock
+// Use the same convention as rlbox to allow applications to customize the
+// shared lock
 #ifndef rlbox_use_custom_shared_lock
 #  define rlbox_shared_lock(name) std::shared_timed_mutex name
 #  define rlbox_acquire_shared_guard(name, ...)                                \
@@ -725,7 +726,8 @@ protected:
       });
     }
 
-    detail::dynamic_check(found,
+    detail::dynamic_check(
+      found,
       "Could not find an empty slot in sandbox function table. This would "
       "happen if you have registered too many callbacks, or unsandboxed "
       "too many function pointers. You can file a bug if you want to "
@@ -747,19 +749,26 @@ protected:
   template<typename T_Ret, typename... T_Args>
   inline void impl_unregister_callback(void* key)
   {
-    rlbox_acquire_unique_guard(lock, callback_mutex);
-    for (uint32_t i = 0; i < MAX_CALLBACKS; i++) {
-      if (callback_unique_keys[i] == key) {
-        callback_unique_keys[i] = nullptr;
-        callbacks[i] = nullptr;
-        uint32_t slot_number = callback_slot_assignment[i];
-        callback_slot_assignment[i] = 0;
-        lock.unlock();
-
-        std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
-        callback_slots->elements[slot_number]->rf = 0;
-        return;
+    bool found = false;
+    uint32_t i = 0;
+    {
+      rlbox_acquire_unique_guard(lock, callback_mutex);
+      for (; i < MAX_CALLBACKS; i++) {
+        if (callback_unique_keys[i] == key) {
+          callback_unique_keys[i] = nullptr;
+          callbacks[i] = nullptr;
+          callback_slot_assignment[i] = 0;
+          found = true;
+          break;
+        }
       }
+    }
+
+    if (found) {
+      uint32_t slot_number = callback_slot_assignment[i];
+      std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
+      callback_slots->elements[slot_number]->rf = 0;
+      return;
     }
     detail::dynamic_check(
       false, "Internal error: Could not find callback to unregister");

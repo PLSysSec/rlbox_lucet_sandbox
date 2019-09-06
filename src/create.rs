@@ -54,7 +54,7 @@ fn lucet_load_module_helper(module_path: &String) -> Result<LucetSandboxInstance
     // Nearest 4k
     let globals_size = ((min_globals_size + 4096 - 1) / 4096) * 4096;
 
-    let region = MmapRegion::create(
+    let region = MmapRegion::create_aligned(
         1,
         &Limits {
             heap_memory_size: 4 * 1024 * 1024 * 1024,        // 4GB
@@ -62,6 +62,7 @@ fn lucet_load_module_helper(module_path: &String) -> Result<LucetSandboxInstance
             stack_size: 8 * 1024 * 1024,                     // 8MB - pthread default
             globals_size: globals_size,
         },
+        4 * 1024 * 1024 * 1024,                              // 4GB heap alignment
     )?;
 
     let sig = module.get_signatures().to_vec();

@@ -12,6 +12,10 @@ lucet-wasi = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 lucet-runtime = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 lucet-runtime-internals = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
 lucet-module-data = { git = "https://github.com/PLSysSec/lucet_sandbox_compiler" }
+# lucet-wasi = { path = "../lucet_sandbox_compiler/lucet-wasi" }
+# lucet-runtime = { path = "../lucet_sandbox_compiler/lucet-runtime" }
+# lucet-runtime-internals = { path = "../lucet_sandbox_compiler/lucet-runtime/lucet-runtime-internals" }
+# lucet-module-data = { path = "../lucet_sandbox_compiler/lucet-module-data" }
 
 [lib]
 name = "rlbox_lucet_sandbox"

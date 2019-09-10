@@ -1,7 +1,7 @@
 use crate::types::{LucetSandboxInstance, LucetValue};
 
-use lucet_module_data::FunctionPointer;
-use lucet_runtime::{UntypedRetVal};
+use lucet_module::FunctionPointer;
+use lucet_runtime::{ RunResult, UntypedRetVal };
 use lucet_runtime_internals::instance::InstanceInternal;
 
 use std::ffi::{c_void, CStr};
@@ -102,5 +102,8 @@ fn lucet_run_function_helper(
         }
         _ => {},
     };
-    return ret.unwrap();
+    match ret.unwrap() {
+        RunResult::Returned(val) => { val }
+        _ => panic!("Function did not complete successfully")
+    }
 }

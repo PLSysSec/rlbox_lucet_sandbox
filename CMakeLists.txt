@@ -129,6 +129,10 @@ add_custom_command(OUTPUT ${LUCET_PATH}
                    COMMENT "Building customized lucet compiler")
 add_custom_target(lucet_release ALL DEPENDS ${LUCET_PATH})
 
+# set(mod_lucet_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../lucet_sandbox_compiler")
+# set(LUCET_DIR "${mod_lucet_SOURCE_DIR}/target/debug/")
+# set(LUCET_PATH "${LUCET_DIR}/lucetc")
+
 file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 
 # Use the dynamic library as wasi symbols needed by the wasm module are hosted

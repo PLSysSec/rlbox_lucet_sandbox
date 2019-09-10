@@ -1,6 +1,6 @@
 use crate::types::{LucetFunctionSignature, LucetSandboxInstance, SizedBuffer};
 
-use lucet_module_data::Signature;
+use lucet_module::Signature;
 use lucet_runtime_internals::instance::InstanceInternal;
 
 use std::convert::TryFrom;

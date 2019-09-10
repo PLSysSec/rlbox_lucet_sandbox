@@ -1,4 +1,4 @@
-use lucet_module_data::{Signature, ValueType};
+use lucet_module::{Signature, ValueType};
 use lucet_runtime::{InstanceHandle, MmapRegion};
 use lucet_runtime_internals::val::Val;
 
@@ -17,7 +17,7 @@ pub enum Error {
     GoblinError(goblin::error::Error),
     WasiError(failure::Error),
     LucetRuntimeError(lucet_runtime_internals::error::Error),
-    LucetModuleError(lucet_module_data::Error),
+    LucetModuleError(lucet_module::Error),
 }
 
 impl From<goblin::error::Error> for Error {
@@ -38,8 +38,8 @@ impl From<lucet_runtime_internals::error::Error> for Error {
     }
 }
 
-impl From<lucet_module_data::Error> for Error {
-    fn from(e: lucet_module_data::Error) -> Self {
+impl From<lucet_module::Error> for Error {
+    fn from(e: lucet_module::Error) -> Self {
         Error::LucetModuleError(e)
     }
 }

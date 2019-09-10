@@ -1,6 +1,6 @@
 use crate::types::LucetSandboxInstance;
 
-use lucet_module_data::FunctionPointer;
+use lucet_module::FunctionPointer;
 use lucet_runtime_internals::instance::InstanceInternal;
 
 use std::ffi::c_void;

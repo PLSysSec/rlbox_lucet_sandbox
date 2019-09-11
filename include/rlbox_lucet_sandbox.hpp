@@ -14,6 +14,7 @@
 #endif
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #define RLBOX_LUCET_UNUSED(...) (void)__VA_ARGS__
 
@@ -176,9 +177,24 @@ private:
     uint32_t slot_number[MAX_CALLBACKS];
   };
   inline static std::mutex callback_table_mutex;
+  // We need to share the callback slot info across multiple sandbox instances
+  // that may load the same sandboxed library. Thus if the sandboxed library is
+  // already in the memory space, we should just use the previously saved info
+  // as the load is destroys the callback info. Once all instances of the
+  // library is unloaded, the sandboxed library is removed from the address
+  // space and thus we can "reset" our state. The semantics of shared and weak
+  // pointers ensure this and will automatically release the memory after all
+  // instances are released.
   inline static std::map<void*, std::weak_ptr<FunctionTable>>
     shared_callback_slots;
   std::shared_ptr<FunctionTable> callback_slots = nullptr;
+  // However, if the library is also loaded externally in the application, then
+  // we don't know when we can ever "reset". In such scenarios, we are better of
+  // never throwing away the callback info, rather than figuring out
+  // what/why/when the application is loading or unloading the sandboxed
+  // library. An extra reference to the shared_ptr will ensure this.
+  inline static std::vector<std::shared_ptr<FunctionTable>>
+    saved_callback_slot_info;
 
   struct rlbox_lucet_sandbox_thread_local
   {
@@ -312,7 +328,7 @@ private:
     }
   }
 
-  inline void set_callbacks_slots_ref()
+  inline void set_callbacks_slots_ref(bool external_loads_exist)
   {
     LucetFunctionTable functionPointerTable =
       lucet_get_function_pointer_table(sandbox);
@@ -333,17 +349,24 @@ private:
       uintptr_t reservedVal =
         lucet_get_reserved_callback_slot_val(sandbox, i + 1);
 
+      bool found = false;
       for (size_t j = 0; j < functionPointerTable.length; j++) {
         if (functionPointerTable.data[j].rf == reservedVal) {
           functionPointerTable.data[j].rf = 0;
           callback_slots->elements[i] = &(functionPointerTable.data[j]);
           callback_slots->slot_number[i] = static_cast<uint32_t>(j);
+          found = true;
           break;
         }
       }
+
+      detail::dynamic_check(found, "Unable to intialize callback tables");
     }
 
     shared_callback_slots[key] = callback_slots;
+    if (external_loads_exist) {
+      saved_callback_slot_info.push_back(callback_slots);
+    }
   }
 
   template<uint32_t N, typename T_Ret, typename... T_Args>
@@ -425,7 +448,11 @@ private:
   }
 
 protected:
-  inline void impl_create_sandbox(const char* lucet_module_path)
+  // Set external_loads_exist to true, if the host application loads the
+  // library lucet_module_path outside of rlbox_lucet_sandbox such as via dlopen
+  // or the Windows equivalent
+  inline void impl_create_sandbox(const char* lucet_module_path,
+                                  bool external_loads_exist)
   {
     detail::dynamic_check(sandbox == nullptr, "Sandbox already initialized");
     sandbox = lucet_load_module(lucet_module_path);
@@ -447,7 +474,15 @@ protected:
     malloc_index = impl_lookup_symbol("malloc");
     free_index = impl_lookup_symbol("free");
 
-    set_callbacks_slots_ref();
+    set_callbacks_slots_ref(external_loads_exist);
+  }
+
+  inline void impl_create_sandbox(const char* lucet_module_path)
+  {
+    // Default is to assume that no external code will load the wasm library as
+    // this is usually the case
+    const bool external_loads_exist = false;
+    impl_create_sandbox(lucet_module_path, external_loads_exist);
   }
 
   inline void impl_destroy_sandbox() { lucet_drop_module(sandbox); }

@@ -1,9 +1,8 @@
-#define CATCH_CONFIG_MAIN
-#include "catch2/catch.hpp"
-
 #define RLBOX_USE_EXCEPTIONS
 #include "rlbox_lucet_sandbox.hpp"
 
+// NOLINTNEXTLINE
+#define TestName "rlbox_lucet_sandbox"
 // NOLINTNEXTLINE
 #define TestType rlbox::rlbox_lucet_sandbox
 

@@ -209,7 +209,9 @@ add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
 
 add_custom_target(glue_lib_wasm ALL DEPENDS ${GLUE_LIB_WASM} ${GLUE_LIB_SO})
 
-add_executable(test_rlbox_glue test/test_lucet_sandbox_glue.cpp)
+add_executable(test_rlbox_glue test/test_lucet_sandbox_glue_main.cpp
+                               test/test_lucet_sandbox_glue.cpp
+                               test/test_lucet_sandbox_glue_preload.cpp)
 target_include_directories(test_rlbox_glue PUBLIC include)
 target_include_directories(test_rlbox_glue
                            PUBLIC ${rlbox_SOURCE_DIR}/code/include)

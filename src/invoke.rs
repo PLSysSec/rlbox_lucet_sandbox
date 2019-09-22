@@ -1,11 +1,9 @@
-use crate::types::{LucetSandboxInstance, LucetValue};
+use crate::types::LucetSandboxInstance;
 
-use lucet_module::FunctionPointer;
-use lucet_runtime::{ RunResult, UntypedRetVal };
 use lucet_runtime_internals::instance::InstanceInternal;
 
 use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_char;
 
 #[no_mangle]
 pub extern "C" fn lucet_lookup_function(
@@ -24,86 +22,8 @@ pub extern "C" fn lucet_lookup_function(
 }
 
 #[no_mangle]
-pub extern "C" fn lucet_run_function_return_void(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) {
-    lucet_run_function_helper(inst_ptr, func_ptr, argc, argv);
-}
-
-#[no_mangle]
-pub extern "C" fn lucet_run_function_return_u32(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) -> u32 {
-    let ret = lucet_run_function_helper(inst_ptr, func_ptr, argc, argv);
-    return ret.into();
-}
-
-#[no_mangle]
-pub extern "C" fn lucet_run_function_return_u64(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) -> u64 {
-    let ret = lucet_run_function_helper(inst_ptr, func_ptr, argc, argv);
-    return ret.into();
-}
-
-#[no_mangle]
-pub extern "C" fn lucet_run_function_return_f32(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) -> f32 {
-    let ret = lucet_run_function_helper(inst_ptr, func_ptr, argc, argv);
-    return ret.into();
-}
-
-#[no_mangle]
-pub extern "C" fn lucet_run_function_return_f64(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) -> f64 {
-    let ret = lucet_run_function_helper(inst_ptr, func_ptr, argc, argv);
-    return ret.into();
-}
-
-fn lucet_run_function_helper(
-    inst_ptr: *mut c_void,
-    func_ptr: *mut c_void,
-    argc: c_int,
-    argv: *mut LucetValue,
-) -> UntypedRetVal {
+pub extern "C" fn lucet_set_curr_instance(inst_ptr: *mut c_void)
+{
     let inst = unsafe { &mut *(inst_ptr as *mut LucetSandboxInstance) };
-    let func = FunctionPointer::from_usize(func_ptr as usize);
-
-    let args = if argc == 0 {
-        vec![]
-    } else {
-        unsafe { std::slice::from_raw_parts(argv, argc as usize) }
-            .into_iter()
-            .map(|v| v.into())
-            .collect()
-    };
-
-    let ret = inst.instance_handle.unsafe_run_func_fast(func, &args);
-    match &ret {
-        Err(e) => {
-            println!("Error {:?}!", e);
-        }
-        _ => {},
-    };
-    match ret.unwrap() {
-        RunResult::Returned(val) => { val }
-        _ => panic!("Function did not complete successfully")
-    }
+    inst.instance_handle.set_current_instance();
 }

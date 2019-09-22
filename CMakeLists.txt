@@ -64,6 +64,14 @@ if(CLANG_FORMAT)
                             ${ALL_CXX_SOURCE_FILES})
 endif()
 
+find_program(CARGO "cargo")
+if(!CARGO)
+  message(
+    FATAL_ERROR
+      "Could not find cargo. Please install cargo as it is needed to build rust libraries."
+    )
+endif()
+
 # Dependencies ###################
 
 include(FetchContent)
@@ -105,14 +113,6 @@ if(NOT mod_lucet_POLULATED)
   FetchContent_Populate(mod_lucet)
 endif()
 # Rust Lib ###################
-
-find_program(CARGO "cargo")
-if(!CARGO)
-  message(
-    FATAL_ERROR
-      "Could not find cargo. Please install cargo as it is needed to build rust libraries."
-    )
-endif()
 
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")
 set(LUCET_PATH "${LUCET_DIR}/lucetc")
@@ -237,3 +237,4 @@ if(UNIX)
   target_link_libraries(test_rlbox_glue rt)
 endif()
 catch_discover_tests(test_rlbox_glue)
+

@@ -715,6 +715,7 @@ protected:
       "does not correspond to any callbacks used in the library.");
 
     bool found = false;
+    uint32_t found_loc = 0;
     uint32_t slot_number = 0;
 
     {
@@ -726,13 +727,9 @@ protected:
         constexpr auto i = I.value;
         if (!found && callback_slots->elements[i]->rf == 0) {
           found = true;
+          found_loc = i;
           slot_number = callback_slots->slot_number[i];
-          {
-            rlbox_acquire_unique_guard(lock, callback_mutex);
-            callback_unique_keys[i] = key;
-            callbacks[i] = callback;
-            callback_slot_assignment[i] = slot_number;
-          }
+
           void* chosen_interceptor;
           if constexpr (std::is_class_v<T_Ret>) {
             chosen_interceptor = reinterpret_cast<void*>(
@@ -755,6 +752,13 @@ protected:
       "too many function pointers. You can file a bug if you want to "
       "increase the maximum allowed callbacks or unsadnboxed functions "
       "pointers");
+
+    {
+      rlbox_acquire_unique_guard(lock, callback_mutex);
+      callback_unique_keys[found_loc] = key;
+      callbacks[found_loc] = callback;
+      callback_slot_assignment[found_loc] = slot_number;
+    }
 
     return static_cast<T_PointerType>(slot_number);
   }
@@ -786,14 +790,12 @@ protected:
       }
     }
 
-    if (found) {
-      uint32_t slot_number = callback_slot_assignment[i];
-      std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
-      callback_slots->elements[slot_number]->rf = 0;
-      return;
-    }
     detail::dynamic_check(
-      false, "Internal error: Could not find callback to unregister");
+      found, "Internal error: Could not find callback to unregister");
+
+    std::lock_guard<std::mutex> shared_lock(callback_table_mutex);
+    callback_slots->elements[i]->rf = 0;
+    return;
   }
 };
 

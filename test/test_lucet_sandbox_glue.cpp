@@ -1,4 +1,6 @@
 #define RLBOX_USE_EXCEPTIONS
+#define RLBOX_ENABLE_DEBUG_ASSERTIONS
+#define RLBOX_SINGLE_THREADED_INVOCATIONS
 #include "rlbox_lucet_sandbox.hpp"
 
 // NOLINTNEXTLINE

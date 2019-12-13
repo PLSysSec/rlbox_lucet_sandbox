@@ -256,8 +256,18 @@ private:
     uint32_t last_callback_invoked;
   };
 
+#ifndef RLBOX_EMBEDDER_PROVIDES_TLS_STATIC_VARIABLES
   thread_local static inline rlbox_lucet_sandbox_thread_local thread_data{ 0,
                                                                            0 };
+#else
+  thread_local static rlbox_lucet_sandbox_thread_local thread_data;
+#  define RLBOX_LUCET_SANDBOX_STATIC_VARIABLES()                               \
+    thread_local rlbox::rlbox_lucet_sandbox::rlbox_lucet_sandbox_thread_local  \
+      rlbox::rlbox_lucet_sandbox::thread_data                                  \
+    {                                                                          \
+      0, 0                                                                     \
+    }
+#endif
 
   template<typename T_FormalRet, typename T_ActualRet>
   inline auto serialize_to_sandbox(T_ActualRet arg)
@@ -610,7 +620,8 @@ protected:
     if constexpr (std::is_class_v<T_Ret>) {
       using T_Conv1 = lucet_detail::change_return_type<T_Converted, void>;
       using T_Conv2 = lucet_detail::prepend_arg_type<T_Conv1, T_PointerType>;
-      auto func_ptr_conv = reinterpret_cast<T_Conv2*>(reinterpret_cast<uintptr_t>(func_ptr));
+      auto func_ptr_conv =
+        reinterpret_cast<T_Conv2*>(reinterpret_cast<uintptr_t>(func_ptr));
       ensure_return_slot_size(sizeof(T_Ret));
       impl_invoke_with_func_ptr<T>(func_ptr_conv, return_slot, params...);
 
@@ -630,7 +641,7 @@ protected:
     }();
 
     // 0 arg functions create 0 length arrays which is not allowed
-    T_PointerType allocations_buff[alloc_length == 0? 1 : alloc_length];
+    T_PointerType allocations_buff[alloc_length == 0 ? 1 : alloc_length];
     T_PointerType* allocations = allocations_buff;
 
     auto serialize_class_arg =
@@ -661,7 +672,8 @@ protected:
     using T_ConvHeap = lucet_detail::prepend_arg_type<T_ConvNoClass, uint64_t>;
 
     // Function invocation
-    auto func_ptr_conv = reinterpret_cast<T_ConvHeap*>(reinterpret_cast<uintptr_t>(func_ptr));
+    auto func_ptr_conv =
+      reinterpret_cast<T_ConvHeap*>(reinterpret_cast<uintptr_t>(func_ptr));
 
     using T_NoVoidRet =
       std::conditional_t<std::is_void_v<T_Ret>, uint32_t, T_Ret>;

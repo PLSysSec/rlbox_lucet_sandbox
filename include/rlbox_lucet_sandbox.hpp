@@ -357,10 +357,10 @@ private:
       callback_slots = shared_slots;
       // Sometimes, dlopen and process forking seem to act a little weird.
       // Writes to the writable page of the dynamic lib section seem to not
-      // always be propogated (possibly when the dynamic library is opened
+      // always be propagated (possibly when the dynamic library is opened
       // externally - "external_loads_exist")). This occurred in when RLBox was
-      // used in ASAN builds of Firefox. In general, we take the precaustion of
-      // rechecking this on each sandbix creation.
+      // used in ASAN builds of Firefox. In general, we take the precaution of
+      // rechecking this on each sandbox creation.
       reinit_callback_ref_data(functionPointerTable, callback_slots);
       return;
     }

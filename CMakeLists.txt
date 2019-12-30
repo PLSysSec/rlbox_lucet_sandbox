@@ -26,7 +26,7 @@ else()
 endif()
 
 # For ASAN
-# add_compile_options(-fsanitize=address -O2 -gline-tables-only)
+# add_compile_options( -O2 -gline-tables-only)
 
 # Dev Tools ###################
 
@@ -241,4 +241,9 @@ if(UNIX)
   target_link_libraries(test_rlbox_glue rt)
 endif()
 catch_discover_tests(test_rlbox_glue)
+
+# Shortcuts ###################
+
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} -V)
+add_dependencies(check test_rlbox_glue)
 

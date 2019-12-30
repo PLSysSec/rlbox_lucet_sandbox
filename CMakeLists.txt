@@ -11,30 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(WERR "Enable warnings as errors" OFF)
-
-if(MSVC)
-  add_compile_options(/W4)
-  if(WERR)
-    add_compile_options(/WX)
-  endif()
-else()
-  add_compile_options(-Wall -Wextra -pedantic)
-  if(WERR)
-    add_compile_options(-Werror)
-  endif()
-endif()
-
-# For ASAN
-# add_compile_options( -O2 -gline-tables-only)
-
-# Dev Tools ###################
-
-find_program(CLANG_TIDY "clang-tidy")
-if(CLANG_TIDY)
-  # Config in .clang-tidy
-  set(CMAKE_CXX_CLANG_TIDY clang-tidy)
-endif()
+option(DEV "Use settings suitable for dev contributions to rlbox" OFF)
 
 file(GLOB_RECURSE
      ALL_CXX_SOURCE_FILES
@@ -57,15 +34,40 @@ file(GLOB_RECURSE
      c_src/*.ii
      c_src/*.[CHI])
 
-find_program(CLANG_FORMAT "clang-format")
-if(CLANG_FORMAT)
-  # Config in .clang-format
-  add_custom_target(format-source
-                    COMMAND clang-format
-                            -i
-                            -style=file
-                            ${ALL_CXX_SOURCE_FILES})
+# Dev Tools ###################
+
+if(DEV)
+  if(MSVC)
+    add_compile_options(/W4) # warnings
+    add_compile_options(/WX) # warnings as errors
+  else()
+    add_compile_options(-Wall -Wextra -pedantic) # warnings
+    add_compile_options(-Werror) # warnings as errors
+    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address)
+    # add_compile_options(-fsanitize=undefined)
+    # add_link_options(-fsanitize=undefined)
+  endif()
+
+  find_program(CLANG_TIDY "clang-tidy")
+  if(CLANG_TIDY)
+    # Config in .clang-tidy
+    set(CMAKE_CXX_CLANG_TIDY clang-tidy)
+  endif()
+
+  find_program(CLANG_FORMAT "clang-format")
+  if(CLANG_FORMAT)
+    # Config in .clang-format
+    add_custom_target(format-source
+                      COMMAND clang-format
+                              -i
+                              -style=file
+                              ${ALL_CXX_SOURCE_FILES})
+  endif()
+
 endif()
+
+# Dependencies ###################
 
 find_program(CARGO "cargo")
 if(!CARGO)
@@ -74,8 +76,6 @@ if(!CARGO)
       "Could not find cargo. Please install cargo as it is needed to build rust libraries."
     )
 endif()
-
-# Dependencies ###################
 
 include(FetchContent)
 
@@ -115,6 +115,7 @@ FetchContent_GetProperties(mod_lucet)
 if(NOT mod_lucet_POPULATED)
   FetchContent_Populate(mod_lucet)
 endif()
+
 # Rust Lib ###################
 
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")

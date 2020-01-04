@@ -45,8 +45,8 @@ if(DEV)
     add_compile_options(-Werror) # warnings as errors
     add_compile_options(-fsanitize=address)
     add_link_options(-fsanitize=address)
-    # add_compile_options(-fsanitize=undefined)
-    # add_link_options(-fsanitize=undefined)
+    add_compile_options(-fsanitize=undefined)
+    add_link_options(-fsanitize=undefined)
   endif()
 
   find_program(CLANG_TIDY "clang-tidy")

@@ -73,7 +73,7 @@ fn lucet_load_module_helper(module_path: &String, allow_stdio: bool) -> Result<L
         .args(&[&module_path]);
 
     if allow_stdio {
-        builder = builder.inherit_stdio();
+        builder = builder.inherit_stdio_no_syscall();
     }
 
     let ctx = builder.build()?;

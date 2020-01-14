@@ -83,7 +83,7 @@ FetchContent_Declare(
   rlbox
   GIT_REPOSITORY https://github.com/PLSysSec/rlbox_api_cpp17.git)
 FetchContent_GetProperties(rlbox)
-if(NOT catch2_POPULATED)
+if(NOT rlbox_POPULATED)
   FetchContent_Populate(rlbox)
 endif()
 

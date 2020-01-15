@@ -1,5 +1,5 @@
 dist: bionic
-language: cpp
+language: rust
 
 script:
   # Install a more recent cmake

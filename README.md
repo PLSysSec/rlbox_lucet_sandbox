@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/PLSysSec/rlbox_lucet_sandbox.svg?branch=master)](https://travis-ci.com/PLSysSec/rlbox_lucet_sandbox)
+
 # RLBOX Lucet Sandbox Integration
 Integration with RLBox sandboxing API to leverage the sandboxing in WASM modules compiled with lucet compiler.
 
@@ -18,6 +20,8 @@ cmake -S . -B ./build
 cmake --build ./build --target all
 cmake --build ./build --target test
 ```
+
+On Arch Linux you'll need to install [ncurses5-compat-libs](https://aur.archlinux.org/packages/ncurses5-compat-libs/).
 
 ## Using this library
 

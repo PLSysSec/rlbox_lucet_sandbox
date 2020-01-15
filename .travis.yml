@@ -7,6 +7,6 @@ script:
   - tar xzvf cmake-3.16.0-Linux-x86_64.tar.gz
   - mkdir ./build
   - cd ./build
-  - ./cmake-3.16.0-Linux-x86_64/bin/cmake -S ..
+  - ../cmake-3.16.0-Linux-x86_64/bin/cmake -S ..
   - make
   - make test

@@ -98,11 +98,19 @@ endif()
 add_subdirectory("${catch2_SOURCE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/contrib")
 
-FetchContent_Declare(
-  wasiclang
-  URL
-    https://github.com/CraneStation/wasi-sdk/releases/download/wasi-sdk-6/wasi-sdk-6.0-linux.tar.gz
-  )
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  FetchContent_Declare(
+    wasiclang
+    URL
+      https://github.com/CraneStation/wasi-sdk/releases/download/wasi-sdk-6/wasi-sdk-6.0-macos.tar.gz
+    )
+else()
+  FetchContent_Declare(
+    wasiclang
+    URL
+      https://github.com/CraneStation/wasi-sdk/releases/download/wasi-sdk-6/wasi-sdk-6.0-linux.tar.gz
+    )
+endif()
 FetchContent_GetProperties(wasiclang)
 if(NOT wasiclang_POPULATED)
   FetchContent_Populate(wasiclang)
@@ -198,13 +206,13 @@ add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
                            wasiclang_SOURCE_DIR=${wasiclang_SOURCE_DIR}
                            LUCET_DIR=${LUCET_DIR}
                            LUCET_WASI_DIR=${mod_lucet_SOURCE_DIR}/lucet-wasi
-                           cmake
+                           ${CMAKE_COMMAND}
                            -S
                            .
                            -B
                            ${CMAKE_BINARY_DIR}/wasm
                    COMMAND VERBOSE=1
-                           cmake
+                           ${CMAKE_COMMAND}
                            --build
                            ${CMAKE_BINARY_DIR}/wasm
                            --target

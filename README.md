@@ -5,7 +5,8 @@ Integration with RLBox sandboxing API to leverage the sandboxing in WASM modules
 
 For details about the RLBox sandboxing APIs, see [here](https://github.com/PLSysSec/rlbox_api_cpp17).
 
-Currently lucet supports only Linux x64, therefore this repo will only work in this environment.
+This code has been tested on 64-bit versions of Ubuntu and Mac OSX.
+The lucet compiler does not currently support Windows.
 
 ## Reporting security bugs
 

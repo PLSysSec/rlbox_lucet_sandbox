@@ -126,6 +126,11 @@ endif()
 
 # Rust Lib ###################
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(DYLIB_EXT "dylib")
+else()
+  set(DYLIB_EXT "so")
+endif()
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")
 set(LUCET_PATH "${LUCET_DIR}/lucetc")
 file(GLOB_RECURSE LUCET_SOURCE_FILES ${mod_lucet_SOURCE_DIR}/*.rs ${mod_lucet_SOURCE_DIR}/*.S)
@@ -151,7 +156,7 @@ file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 # in it. If we include the static version, we need to make the main executable
 # expose symbols through rdynamic
 set(RUST_LIB_DEBUG_PATH
-    "${CMAKE_BINARY_DIR}/cargo/debug/librlbox_lucet_sandbox.so")
+    "${CMAKE_BINARY_DIR}/cargo/debug/librlbox_lucet_sandbox.${DYLIB_EXT}")
 add_custom_command(OUTPUT ${RUST_LIB_DEBUG_PATH}
                    DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo ${CARGO}
@@ -161,7 +166,7 @@ add_custom_target(lucet_sandbox_rustlib_debug ALL
                   DEPENDS ${RUST_LIB_DEBUG_PATH})
 
 set(RUST_LIB_RELEASE_PATH
-    "${CMAKE_BINARY_DIR}/cargo/release/librlbox_lucet_sandbox.so")
+    "${CMAKE_BINARY_DIR}/cargo/release/librlbox_lucet_sandbox.${DYLIB_EXT}")
 add_custom_command(OUTPUT ${RUST_LIB_RELEASE_PATH}
                    DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
@@ -197,7 +202,7 @@ endif()
 
 file(GLOB_RECURSE C_SOURCE_FILES c_src/*)
 set(GLUE_LIB_WASM "${CMAKE_BINARY_DIR}/wasm/glue_lib_lucet.wasm")
-set(GLUE_LIB_SO "${CMAKE_BINARY_DIR}/wasm/glue_lib_lucet.so")
+set(GLUE_LIB_SO "${CMAKE_BINARY_DIR}/wasm/glue_lib_lucet.${DYLIB_EXT}")
 
 add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
                    DEPENDS ${C_SOURCE_FILES}
@@ -219,7 +224,7 @@ add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
                            all
                    COMMENT "Building wasm library")
 
-add_custom_target(glue_lib_wasm ALL DEPENDS ${GLUE_LIB_WASM} ${GLUE_LIB_SO})
+add_custom_target(glue_lib_wasm ALL DEPENDS lucet_release ${GLUE_LIB_WASM} ${GLUE_LIB_SO})
 
 add_executable(test_rlbox_glue test/test_lucet_sandbox_glue_main.cpp
                                test/test_lucet_sandbox_glue.cpp
@@ -238,6 +243,8 @@ find_package(Threads REQUIRED)
 target_compile_definitions(test_rlbox_glue PUBLIC
                            GLUE_LIB_LUCET_PATH="${GLUE_LIB_SO}")
 
+add_dependencies(test_rlbox_glue lucet_sandbox_rustlib_debug lucet_sandbox_rustlib_release)
+
 target_link_libraries(test_rlbox_glue
                       Catch2::Catch2
                       lucet_sandbox_rustlib
@@ -246,7 +253,7 @@ target_link_libraries(test_rlbox_glue
                       # glue_lib_lucet
                       )
 
-if(UNIX)
+if(UNIX AND NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
   target_link_libraries(test_rlbox_glue rt)
 endif()
 catch_discover_tests(test_rlbox_glue)

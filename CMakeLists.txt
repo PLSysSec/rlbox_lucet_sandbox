@@ -152,11 +152,8 @@ add_custom_target(lucet_release ALL DEPENDS ${LUCET_PATH})
 
 file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 
-# Use the dynamic library as wasi symbols needed by the wasm module are hosted
-# in it. If we include the static version, we need to make the main executable
-# expose symbols through rdynamic
 set(RUST_LIB_DEBUG_PATH
-    "${CMAKE_BINARY_DIR}/cargo/debug/librlbox_lucet_sandbox.${DYLIB_EXT}")
+    "${CMAKE_BINARY_DIR}/cargo/debug/librlbox_lucet_sandbox.a")
 add_custom_command(OUTPUT ${RUST_LIB_DEBUG_PATH}
                    DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo ${CARGO}
@@ -166,7 +163,7 @@ add_custom_target(lucet_sandbox_rustlib_debug ALL
                   DEPENDS ${RUST_LIB_DEBUG_PATH})
 
 set(RUST_LIB_RELEASE_PATH
-    "${CMAKE_BINARY_DIR}/cargo/release/librlbox_lucet_sandbox.${DYLIB_EXT}")
+    "${CMAKE_BINARY_DIR}/cargo/release/librlbox_lucet_sandbox.a")
 add_custom_command(OUTPUT ${RUST_LIB_RELEASE_PATH}
                    DEPENDS ${RUST_SOURCE_FILES} ${LUCET_SOURCE_FILES} Cargo.toml
                    COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
@@ -185,6 +182,10 @@ set_target_properties(lucet_sandbox_rustlib
 set_target_properties(lucet_sandbox_rustlib
                       PROPERTIES IMPORTED_LOCATION_RELEASE
                                  ${RUST_LIB_RELEASE_PATH})
+# The wasi symbols needed by the wasm module are in this static lib, but must
+# be part of the symbol table (locatable through dlsym). We need the following
+# flag for this.
+target_link_options(lucet_sandbox_rustlib INTERFACE "-export-dynamic")
 
 # Tests ###################
 

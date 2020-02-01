@@ -185,8 +185,11 @@ set_target_properties(lucet_sandbox_rustlib
 # The wasi symbols needed by the wasm module are in this static lib, but must
 # be part of the symbol table (locatable through dlsym). We need the following
 # flag for this.
-target_link_options(lucet_sandbox_rustlib INTERFACE "-export-dynamic")
-
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+target_link_options(lucet_sandbox_rustlib INTERFACE "-framework" "Security" "-rdynamic")
+else()
+target_link_options(lucet_sandbox_rustlib INTERFACE "-rdynamic")
+endif()
 # Tests ###################
 
 include(CTest)

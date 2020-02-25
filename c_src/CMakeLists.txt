@@ -50,8 +50,9 @@ else()
 endif()
 set(GLUE_LIB_PATH "${CMAKE_BINARY_DIR}/glue_lib_lucet.${DYLIB_EXT}")
 
+message("Compiler: ${LUCET_DIR}/lucetc")
 add_custom_command(OUTPUT ${GLUE_LIB_PATH}
-                   DEPENDS glue_lib_lucet.wasm
+                   DEPENDS glue_lib_lucet.wasm ${LUCET_DIR}/lucetc
                    COMMAND ${LUCET_DIR}/lucetc
                            --bindings
                            ${LUCET_WASI_DIR}/bindings.json

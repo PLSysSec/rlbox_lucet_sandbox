@@ -116,12 +116,34 @@ if(NOT wasiclang_POPULATED)
   FetchContent_Populate(wasiclang)
 endif()
 
-FetchContent_Declare(
-  mod_lucet
-  GIT_REPOSITORY https://github.com/PLSysSec/lucet_sandbox_compiler)
-FetchContent_GetProperties(mod_lucet)
-if(NOT mod_lucet_POPULATED)
-  FetchContent_Populate(mod_lucet)
+if(NOT DEFINED ENV{CUSTOM_LUCET_DIR})
+
+  FetchContent_Declare(
+    mod_lucet
+    GIT_REPOSITORY https://github.com/PLSysSec/lucet_sandbox_compiler)
+  FetchContent_GetProperties(mod_lucet)
+  if(NOT mod_lucet_POPULATED)
+    FetchContent_Populate(mod_lucet)
+  endif()
+
+  message("Using downloaded lucet.")
+  set (LUCET_SOURCE_DIR ${mod_lucet_SOURCE_DIR})
+  if(EXISTS "${CMAKE_SOURCE_DIR}/Cargo_remote.toml")
+    # replace remote config if we were previously on local config
+    configure_file("${CMAKE_SOURCE_DIR}/Cargo_remote.toml" "${CMAKE_SOURCE_DIR}/Cargo.toml" COPYONLY)
+  endif()
+
+else()
+
+  set (LUCET_SOURCE_DIR "$ENV{CUSTOM_LUCET_DIR}")
+  message("Using specified Lucet: ${LUCET_SOURCE_DIR}")
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Cargo_remote.toml")
+    # save remote config
+    configure_file("${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo_remote.toml" COPYONLY)
+  endif()
+  # use local config
+  configure_file("${CMAKE_SOURCE_DIR}/Cargo_local.toml" "${CMAKE_SOURCE_DIR}/Cargo.toml")
+
 endif()
 
 # Rust Lib ###################
@@ -133,22 +155,19 @@ else()
 endif()
 set(LUCET_DIR "${CMAKE_BINARY_DIR}/cargo/release/")
 set(LUCET_PATH "${LUCET_DIR}/lucetc")
-file(GLOB_RECURSE LUCET_SOURCE_FILES ${mod_lucet_SOURCE_DIR}/*.rs ${mod_lucet_SOURCE_DIR}/*.S)
+file(GLOB_RECURSE LUCET_SOURCE_FILES ${LUCET_SOURCE_DIR}/*.rs ${LUCET_SOURCE_DIR}/*.S)
+
 
 add_custom_command(OUTPUT ${LUCET_PATH}
-                   DEPENDS ${LUCET_SOURCE_FILES}
-                           ${mod_lucet_SOURCE_DIR}/Cargo.toml
-                   COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
-                           ${CARGO}
-                           build
-                           --release
-                   WORKING_DIRECTORY ${mod_lucet_SOURCE_DIR}
-                   COMMENT "Building customized lucet compiler")
+DEPENDS ${LUCET_SOURCE_FILES}
+        ${LUCET_SOURCE_DIR}/Cargo.toml
+COMMAND CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/cargo
+        ${CARGO}
+        build
+        --release
+WORKING_DIRECTORY ${LUCET_SOURCE_DIR}
+COMMENT "Building customized lucet compiler")
 add_custom_target(lucet_release ALL DEPENDS ${LUCET_PATH})
-
-# set(mod_lucet_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../lucet_sandbox_compiler")
-# set(LUCET_DIR "${mod_lucet_SOURCE_DIR}/target/debug/")
-# set(LUCET_PATH "${LUCET_DIR}/lucetc")
 
 file(GLOB_RECURSE RUST_SOURCE_FILES src/*.rs)
 
@@ -209,12 +228,12 @@ set(GLUE_LIB_WASM "${CMAKE_BINARY_DIR}/wasm/glue_lib_lucet.wasm")
 set(GLUE_LIB_SO "${CMAKE_BINARY_DIR}/wasm/glue_lib_lucet.${DYLIB_EXT}")
 
 add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
-                   DEPENDS ${C_SOURCE_FILES}
+                   DEPENDS ${C_SOURCE_FILES} ${LUCET_PATH}
                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/c_src
                    COMMAND rlbox_SOURCE_DIR=${rlbox_SOURCE_DIR}
                            wasiclang_SOURCE_DIR=${wasiclang_SOURCE_DIR}
                            LUCET_DIR=${LUCET_DIR}
-                           LUCET_WASI_DIR=${mod_lucet_SOURCE_DIR}/lucet-wasi
+                           LUCET_WASI_DIR=${LUCET_SOURCE_DIR}/lucet-wasi
                            ${CMAKE_COMMAND}
                            -S
                            .
@@ -228,7 +247,7 @@ add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
                            all
                    COMMENT "Building wasm library")
 
-add_custom_target(glue_lib_wasm ALL DEPENDS lucet_release ${GLUE_LIB_WASM} ${GLUE_LIB_SO})
+add_custom_target(glue_lib_wasm ALL DEPENDS lucet_release ${GLUE_LIB_WASM} ${GLUE_LIB_SO} ${LUCET_PATH})
 
 add_executable(test_rlbox_glue test/test_lucet_sandbox_glue_main.cpp
                                test/test_lucet_sandbox_glue.cpp

@@ -13,7 +13,6 @@ use std::sync::Arc;
 #[no_mangle]
 pub extern "C" fn lucet_ensure_linked() {
     lucet_runtime::lucet_internal_ensure_linked();
-    lucet_wasi::hostcalls::ensure_linked();
 }
 
 #[no_mangle]
@@ -51,7 +50,7 @@ fn lucet_load_module_helper(module_path: &String, allow_stdio: bool) -> Result<L
     let module = DlModule::load(module_path)?;
 
     //Replicating calculations used in lucet examples
-    let min_globals_size = module.globals().len() * std::mem::size_of::<u64>();
+    let min_globals_size = module.initial_globals_size();
     // Nearest 4k
     let globals_size = ((min_globals_size + 4096 - 1) / 4096) * 4096;
 
@@ -74,7 +73,7 @@ fn lucet_load_module_helper(module_path: &String, allow_stdio: bool) -> Result<L
         .args(&[&module_path]);
 
     if allow_stdio {
-        builder = builder.inherit_stdio_no_syscall();
+        builder = builder.inherit_stdio();
     }
 
     let ctx = builder.build()?;

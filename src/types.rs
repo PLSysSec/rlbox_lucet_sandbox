@@ -16,6 +16,7 @@ pub struct LucetSandboxInstance {
 pub enum Error {
     GoblinError(goblin::error::Error),
     WasiError(failure::Error),
+    WasiError2(wasi_common::Error),
     LucetRuntimeError(lucet_runtime_internals::error::Error),
     LucetModuleError(lucet_module::Error),
 }
@@ -29,6 +30,12 @@ impl From<goblin::error::Error> for Error {
 impl From<failure::Error> for Error {
     fn from(e: failure::Error) -> Self {
         Error::WasiError(e)
+    }
+}
+
+impl From<wasi_common::Error> for Error {
+    fn from(e: wasi_common::Error) -> Self {
+        Error::WasiError2(e)
     }
 }
 

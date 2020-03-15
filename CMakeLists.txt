@@ -249,9 +249,20 @@ target_compile_definitions(test_rlbox_glue PUBLIC
 
 add_dependencies(test_rlbox_glue lucet_sandbox_rustlib_debug lucet_sandbox_rustlib_release)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  # using Clang
+  set(LINK_LUCET_LIB -force_load lucet_sandbox_rustlib)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  # using Visual Studio C++
+  set(LINK_LUCET_LIB -WHOLEARCHIVE lucet_sandbox_rustlib)
+else()
+  # using GCC. Assuming other compilers have the same flags as GCC
+  set(LINK_LUCET_LIB -Wl,--whole-archive lucet_sandbox_rustlib -Wl,--no-whole-archive)
+endif()
+
 target_link_libraries(test_rlbox_glue
                       Catch2::Catch2
-                      lucet_sandbox_rustlib
+                      ${LINK_LUCET_LIB}
                       ${CMAKE_THREAD_LIBS_INIT}
                       ${CMAKE_DL_LIBS}
                       # glue_lib_lucet

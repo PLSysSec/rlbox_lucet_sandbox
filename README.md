@@ -62,7 +62,7 @@ make
 - Assuming the above command produced the wasm module `libFoo`, compile this to an ELF shared library using the modified lucetc compiler as shown below.
 
 ```bash
-build/_deps/lucet/target/release/lucetc                   \
+build/cargo/release/lucetc                                \
     --bindings build/_deps/lucet/lucet-wasi/bindings.json \
     --guard-size "4GiB"                                   \
     --min-reserved-size "4GiB"                            \

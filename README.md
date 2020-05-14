@@ -48,11 +48,11 @@ In order to sandbox a library of your choice.
 For instance, to edit an existing `make` based build system, you can run the commmand.
 
 ```bash
-build/_deps/wasiclang-src/opt/wasi-sdk/bin/clang c_src/lucet_sandbox_wrapper.c -c -o c_src/lucet_sandbox_wrapper.o
+build/_deps/wasiclang-src/opt/wasi-sdk/bin/clang --sysroot build/_deps/wasiclang-src/opt/wasi-sdk/share/wasi-sysroot/ c_src/lucet_sandbox_wrapper.c -c -o c_src/lucet_sandbox_wrapper.o
 
 CC=build/_deps/wasiclang-src/opt/wasi-sdk/bin/clang                            \
 CXX=build/_deps/wasiclang-src/opt/wasi-sdk/bin/clang++                         \
-C_FLAGS="--sysroot build/_deps/wasiclang-src/opt/wasi-sdk/share/wasi-sysroot/" \
+CFLAGS="--sysroot build/_deps/wasiclang-src/opt/wasi-sdk/share/wasi-sysroot/"  \
 LD=build/_deps/wasiclang-src/opt/wasi-sdk/bin/wasm-ld                          \
 LDLIBS=lucet_sandbox_wrapper.o                                                 \
 LDFLAGS=-Wl,--export-all                                                       \

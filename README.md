@@ -62,12 +62,12 @@ make
 - Assuming the above command produced the wasm module `libFoo`, compile this to an ELF shared library using the modified lucetc compiler as shown below.
 
 ```bash
-build/cargo/release/lucetc                                \
-    --bindings build/_deps/lucet/lucet-wasi/bindings.json \
-    --guard-size "4GiB"                                   \
-    --min-reserved-size "4GiB"                            \
-    --max-reserved-size "4GiB"                            \
-    libFoo                                                \
+build/cargo/release/lucetc                                        \
+    --bindings build/_deps/mod_lucet-src/lucet-wasi/bindings.json \
+    --guard-size "4GiB"                                           \
+    --min-reserved-size "4GiB"                                    \
+    --max-reserved-size "4GiB"                                    \
+    libFoo                                                        \
     -o libWasmFoo.so
 ```
 - Finally you can write sandboxed code, just as you would with any other RLBox sandbox, such as in the short example below. For more detailed examples, please refer to the tutorial in the [RLBox Repo]((https://github.com/PLSysSec/rlbox_api_cpp17)).

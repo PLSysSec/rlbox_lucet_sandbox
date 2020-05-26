@@ -1,7 +1,7 @@
 use crate::types::{LucetFunctionSignature, LucetSandboxInstance, SizedBuffer};
 
-use lucet_module::Signature;
-use lucet_runtime_internals::instance::InstanceInternal;
+use lucet_module_wasmsbx::Signature;
+use lucet_runtime_internals_wasmsbx::instance::InstanceInternal;
 
 use std::convert::TryFrom;
 use std::ffi::c_void;

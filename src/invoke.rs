@@ -1,6 +1,6 @@
 use crate::types::LucetSandboxInstance;
 
-use lucet_runtime_internals::instance::InstanceInternal;
+use lucet_runtime_internals_wasmsbx::instance::InstanceInternal;
 
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;

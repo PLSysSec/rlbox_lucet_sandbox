@@ -1,9 +1,9 @@
 use crate::types::{Error, LucetSandboxInstance};
 
-use lucet_runtime::{DlModule, Limits, MmapRegion, Module, Region};
-use lucet_runtime_internals::{module::ModuleInternal};
+use lucet_runtime_wasmsbx::{DlModule, Limits, MmapRegion, Module, Region};
+use lucet_runtime_internals_wasmsbx::{module::ModuleInternal};
 
-use lucet_wasi::WasiCtxBuilder;
+use lucet_wasi_wasmsbx::WasiCtxBuilder;
 
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 #[no_mangle]
 pub extern "C" fn lucet_ensure_linked() {
-    lucet_runtime::lucet_internal_ensure_linked();
-    lucet_wasi::hostcalls::ensure_linked();
+    lucet_runtime_wasmsbx::lucet_internal_ensure_linked();
+    lucet_wasi_wasmsbx::hostcalls::ensure_linked();
 }
 
 #[no_mangle]

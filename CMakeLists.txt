@@ -214,7 +214,7 @@ add_custom_command(OUTPUT ${GLUE_LIB_WASM} ${GLUE_LIB_SO}
                    COMMAND rlbox_SOURCE_DIR=${rlbox_SOURCE_DIR}
                            wasiclang_SOURCE_DIR=${wasiclang_SOURCE_DIR}
                            LUCET_DIR=${LUCET_DIR}
-                           LUCET_WASI_DIR=${mod_lucet_SOURCE_DIR}/lucet-wasi
+                           LUCET_WASI_DIR=${mod_lucet_SOURCE_DIR}/lucet-wasi-wasmsbx
                            ${CMAKE_COMMAND}
                            -S
                            .

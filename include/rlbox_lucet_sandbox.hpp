@@ -738,6 +738,46 @@ protected:
       std::conditional_t<std::is_void_v<T_Ret>, uint32_t, T_Ret>;
     T_NoVoidRet ret;
 
+        // Save all callee save regs
+
+    if constexpr (std::is_void_v<T_Ret>) {
+      RLBOX_LUCET_UNUSED(ret);
+      func_ptr_conv(heap_base, serialize_class_arg(params)...);
+    } else {
+      ret = func_ptr_conv(heap_base, serialize_class_arg(params)...);
+    }
+
+    // Linux
+    // Save RBX, RBP, R12, R13, R14, R15
+    // Zero other registers
+    // Clear floating point and flag state
+    //
+    // Windows
+    // Save RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-15
+    // Clear XMM0-5 and flag state
+
+    // Linux
+    // Save callee save
+    // movq    NACL_THREAD_CONTEXT_OFFSET_RBX(%r11), %rbx
+    // movq    NACL_THREAD_CONTEXT_OFFSET_RBP(%r11), %rbp
+    // movq    NACL_THREAD_CONTEXT_OFFSET_R12(%r11), %r12
+    // movq    NACL_THREAD_CONTEXT_OFFSET_R13(%r11), %r13
+    // movq    NACL_THREAD_CONTEXT_OFFSET_R14(%r11), %r14
+    // movq    NACL_THREAD_CONTEXT_OFFSET_R15(%r11), %r15
+    // Clear the x87, MMX, and SSE state.
+    // fxrstor fxrstor_default_state(%rip)
+    // fldcw   NACL_THREAD_CONTEXT_OFFSET_FCW(%r11)
+    // ldmxcsr NACL_THREAD_CONTEXT_OFFSET_MXCSR(%r11)
+    //     /*
+    //   * Clear the AVX state that the "fxrstor" instruction doesn't cover.
+    //   * We could roll them together by using the "xrstor" instruction, but
+    //   * that has a complicated protocol and this seems to perform fine.
+    //   *
+    //   * This is "vzeroupper".
+    //   * Some assembler versions don't know the AVX instructions.
+    //   */
+    // .byte   0xc5, 0xf8, 0x77
+
     if constexpr (std::is_void_v<T_Ret>) {
       RLBOX_LUCET_UNUSED(ret);
       func_ptr_conv(heap_base, serialize_class_arg(params)...);

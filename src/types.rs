@@ -1,6 +1,6 @@
-use lucet_module::{Signature, ValueType};
-use lucet_runtime::{InstanceHandle, MmapRegion};
-use lucet_runtime_internals::val::Val;
+use lucet_module_wasmsbx::{Signature, ValueType};
+use lucet_runtime_wasmsbx::{InstanceHandle, MmapRegion};
+use lucet_runtime_internals_wasmsbx::val::Val;
 
 use std::convert::TryFrom;
 use std::ffi::c_void;
@@ -16,8 +16,8 @@ pub struct LucetSandboxInstance {
 pub enum Error {
     GoblinError(goblin::error::Error),
     WasiError(failure::Error),
-    LucetRuntimeError(lucet_runtime_internals::error::Error),
-    LucetModuleError(lucet_module::Error),
+    LucetRuntimeError(lucet_runtime_internals_wasmsbx::error::Error),
+    LucetModuleError(lucet_module_wasmsbx::Error),
 }
 
 impl From<goblin::error::Error> for Error {
@@ -32,14 +32,14 @@ impl From<failure::Error> for Error {
     }
 }
 
-impl From<lucet_runtime_internals::error::Error> for Error {
-    fn from(e: lucet_runtime_internals::error::Error) -> Self {
+impl From<lucet_runtime_internals_wasmsbx::error::Error> for Error {
+    fn from(e: lucet_runtime_internals_wasmsbx::error::Error) -> Self {
         Error::LucetRuntimeError(e)
     }
 }
 
-impl From<lucet_module::Error> for Error {
-    fn from(e: lucet_module::Error) -> Self {
+impl From<lucet_module_wasmsbx::Error> for Error {
+    fn from(e: lucet_module_wasmsbx::Error) -> Self {
         Error::LucetModuleError(e)
     }
 }

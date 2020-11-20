@@ -713,9 +713,9 @@ protected:
         auto ptr =
           reinterpret_cast<T_Arg*>(impl_get_unsandboxed_pointer<T_Arg*>(slot));
         *ptr = arg;
-        allocations[0] = arg;
+        allocations[0] = slot;
         allocations++;
-        return ptr;
+        return slot;
       } else {
         return arg;
       }

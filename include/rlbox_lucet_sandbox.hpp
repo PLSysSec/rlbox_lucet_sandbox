@@ -279,6 +279,115 @@ private:
                                                                           0 };
 #endif
 
+  template<typename T_Formal, typename T_Actual>
+  inline LucetValue serialize_arg(T_PointerType* allocations, T_Actual arg)
+  {
+    LucetValue ret;
+    using T = T_Formal;
+    if constexpr ((std::is_integral_v<T> || std::is_enum_v<T>)&&sizeof(T) <=
+                  sizeof(uint32_t)) {
+      static_assert(lucet_detail::convert_type_to_wasm_type<T>::lucet_type ==
+                    LucetValueType_I32);
+      ret.val_type = LucetValueType_I32;
+      ret.u32 = static_cast<uint32_t>(arg);
+    } else if constexpr ((std::is_integral_v<T> ||
+                          std::is_enum_v<T>)&&sizeof(T) <= sizeof(uint64_t)) {
+      static_assert(lucet_detail::convert_type_to_wasm_type<T>::lucet_type ==
+                    LucetValueType_I64);
+      ret.val_type = LucetValueType_I64;
+      ret.u64 = static_cast<uint64_t>(arg);
+    } else if constexpr (std::is_same_v<T, float>) {
+      static_assert(lucet_detail::convert_type_to_wasm_type<T>::lucet_type ==
+                    LucetValueType_F32);
+      ret.val_type = LucetValueType_F32;
+      ret.f32 = arg;
+    } else if constexpr (std::is_same_v<T, double>) {
+      static_assert(lucet_detail::convert_type_to_wasm_type<T>::lucet_type ==
+                    LucetValueType_F64);
+      ret.val_type = LucetValueType_F64;
+      ret.f64 = arg;
+    } else if constexpr (std::is_class_v<T>) {
+      auto sandboxed_ptr = this->impl_malloc_in_sandbox(sizeof(T));
+      *allocations = sandboxed_ptr;
+      allocations++;
+
+      auto ptr = reinterpret_cast<T*>(
+        this->impl_get_unsandboxed_pointer<T>(sandboxed_ptr));
+      *ptr = arg;
+
+      // sanity check that pointers are stored as i32s
+      static_assert(lucet_detail::convert_type_to_wasm_type<T*>::lucet_type ==
+                    LucetValueType_I32);
+      ret.val_type = LucetValueType_I32;
+      ret.u32 = sandboxed_ptr;
+    } else {
+      static_assert(lucet_detail::false_v<T>,
+                    "Unexpected case for serialize_arg");
+    }
+    return ret;
+  }
+
+  template<typename T_Ret, typename... T_FormalArgs, typename... T_ActualArgs>
+  inline void serialize_args(T_PointerType* /* allocations */,
+                             LucetValue* /* out_lucet_args */,
+                             T_Ret (*/* func_ptr */)(T_FormalArgs...),
+                             T_ActualArgs... /* args */)
+  {
+    static_assert(sizeof...(T_FormalArgs) == 0);
+    static_assert(sizeof...(T_ActualArgs) == 0);
+  }
+
+  template<typename T_Ret,
+           typename T_FormalArg,
+           typename... T_FormalArgs,
+           typename T_ActualArg,
+           typename... T_ActualArgs>
+  inline void serialize_args(T_PointerType* allocations,
+                             LucetValue* out_lucet_args,
+                             T_Ret (*func_ptr)(T_FormalArg, T_FormalArgs...),
+                             T_ActualArg arg,
+                             T_ActualArgs... args)
+  {
+    RLBOX_LUCET_UNUSED(func_ptr);
+    *out_lucet_args = serialize_arg<T_FormalArg>(allocations, arg);
+    out_lucet_args++;
+
+    using T_Curried = T_Ret (*)(T_FormalArgs...);
+    T_Curried curried_func_ptr = nullptr;
+
+    serialize_args(allocations,
+                   out_lucet_args,
+                   curried_func_ptr,
+                   std::forward<T_ActualArgs>(args)...);
+  }
+
+  template<typename T_Ret, typename... T_FormalArgs, typename... T_ActualArgs>
+  inline void serialize_return_and_args(T_PointerType* allocations,
+                                        LucetValue* out_lucet_args,
+                                        T_Ret (*func_ptr)(T_FormalArgs...),
+                                        T_ActualArgs&&... args)
+  {
+
+    if constexpr (std::is_class_v<T_Ret>) {
+      auto sandboxed_ptr = this->impl_malloc_in_sandbox(sizeof(T_Ret));
+      *allocations = sandboxed_ptr;
+      allocations++;
+
+      // sanity check that pointers are stored as i32s
+      static_assert(
+        lucet_detail::convert_type_to_wasm_type<T_Ret*>::lucet_type ==
+        LucetValueType_I32);
+      out_lucet_args->val_type = LucetValueType_I32;
+      out_lucet_args->u32 = sandboxed_ptr;
+      out_lucet_args++;
+    }
+
+    serialize_args(allocations,
+                   out_lucet_args,
+                   func_ptr,
+                   std::forward<T_ActualArgs>(args)...);
+  }
+
   template<typename T_FormalRet, typename T_ActualRet>
   inline auto serialize_to_sandbox(T_ActualRet arg)
   {
@@ -665,38 +774,15 @@ protected:
     auto& thread_data = *get_rlbox_lucet_sandbox_thread_data();
 #endif
     thread_data.sandbox = this;
-    lucet_set_curr_instance(sandbox);
+    void* func_ptr_void = reinterpret_cast<void*>(func_ptr);
+    // Add one as the return value may require an arg slot for structs
+    T_PointerType allocations[1 + sizeof...(params)];
+    LucetValue args[1 + sizeof...(params)];
+    serialize_return_and_args(
+      &(allocations[0]), &(args[0]), func_ptr, std::forward<T_Args>(params)...);
 
-    // WASM functions are mangled in the following manner
-    // 1. All primitive types are left as is and follow an LP32 machine model
-    // (as opposed to the possibly 64-bit application)
-    // 2. All pointers are changed to u32 types
-    // 3. Returned class are returned as an out parameter before the actual
-    // function parameters
-    // 4. All class parameters are passed as pointers (u32 types)
-    // 5. The heap address is passed in as the first argument to the function
-    //
-    // RLBox accounts for the first 2 differences in T_Converted type, but we
-    // need to handle the rest
-
-    // Handle point 3
     using T_Ret = lucet_detail::return_argument<T_Converted>;
-    if constexpr (std::is_class_v<T_Ret>) {
-      using T_Conv1 = lucet_detail::change_return_type<T_Converted, void>;
-      using T_Conv2 = lucet_detail::prepend_arg_type<T_Conv1, T_PointerType>;
-      auto func_ptr_conv =
-        reinterpret_cast<T_Conv2*>(reinterpret_cast<uintptr_t>(func_ptr));
-      ensure_return_slot_size(sizeof(T_Ret));
-      impl_invoke_with_func_ptr<T>(func_ptr_conv, return_slot, params...);
-
-      auto ptr = reinterpret_cast<T_Ret*>(
-        impl_get_unsandboxed_pointer<T_Ret*>(return_slot));
-      T_Ret ret = *ptr;
-      return ret;
-    }
-
-    // Handle point 4
-    constexpr size_t alloc_length = [&] {
+    constexpr size_t alloc_length = (std::is_class_v<T_Ret> ? 1 : 0) + [&]() {
       if constexpr (sizeof...(params) > 0) {
         return ((std::is_class_v<T_Args> ? 1 : 0) + ...);
       } else {
@@ -704,58 +790,51 @@ protected:
       }
     }();
 
-    // 0 arg functions create 0 length arrays which is not allowed
-    T_PointerType allocations_buff[alloc_length == 0 ? 1 : alloc_length];
-    T_PointerType* allocations = allocations_buff;
+    constexpr size_t arg_length =
+      sizeof...(params) + (std::is_class_v<T_Ret> ? 1 : 0);
 
-    auto serialize_class_arg =
-      [&](auto arg) -> std::conditional_t<std::is_class_v<decltype(arg)>,
-                                          T_PointerType,
-                                          decltype(arg)> {
-      using T_Arg = decltype(arg);
-      if constexpr (std::is_class_v<T_Arg>) {
-        auto slot = impl_malloc_in_sandbox(sizeof(T_Arg));
-        auto ptr =
-          reinterpret_cast<T_Arg*>(impl_get_unsandboxed_pointer<T_Arg*>(slot));
-        *ptr = arg;
-        allocations[0] = slot;
-        allocations++;
-        return slot;
-      } else {
-        return arg;
+    // struct returns are returned as pointers
+    using T_Wasm_Ret =
+      typename lucet_detail::convert_type_to_wasm_type<T_Ret>::type;
+
+    if constexpr (std::is_void_v<T_Wasm_Ret>) {
+      lucet_run_function_return_void(
+        sandbox, func_ptr_void, arg_length, &(args[0]));
+      for (size_t i = 0; i < alloc_length; i++) {
+        impl_free_in_sandbox(allocations[i]);
       }
-    };
-
-    // 0 arg functions don't use serialize
-    RLBOX_LUCET_UNUSED(serialize_class_arg);
-
-    using T_ConvNoClass =
-      lucet_detail::change_class_arg_types<T_Converted, T_PointerType>;
-
-    // Handle Point 5
-    using T_ConvHeap = lucet_detail::prepend_arg_type<T_ConvNoClass, uint64_t>;
-
-    // Function invocation
-    auto func_ptr_conv =
-      reinterpret_cast<T_ConvHeap*>(reinterpret_cast<uintptr_t>(func_ptr));
-
-    using T_NoVoidRet =
-      std::conditional_t<std::is_void_v<T_Ret>, uint32_t, T_Ret>;
-    T_NoVoidRet ret;
-
-    if constexpr (std::is_void_v<T_Ret>) {
-      RLBOX_LUCET_UNUSED(ret);
-      func_ptr_conv(heap_base, serialize_class_arg(params)...);
+      return;
     } else {
-      ret = func_ptr_conv(heap_base, serialize_class_arg(params)...);
-    }
 
-    for (size_t i = 0; i < alloc_length; i++) {
-      impl_free_in_sandbox(allocations_buff[i]);
-    }
+      T_Wasm_Ret ret;
+      if constexpr (std::is_class_v<T_Ret>) {
+        lucet_run_function_return_void(
+          sandbox, func_ptr_void, arg_length, &(args[0]));
+        ret = allocations[0];
+      } else if constexpr (std::is_same_v<T_Wasm_Ret, uint32_t>) {
+        ret = lucet_run_function_return_u32(
+          sandbox, func_ptr_void, arg_length, &(args[0]));
+      } else if constexpr (std::is_same_v<T_Wasm_Ret, uint64_t>) {
+        ret = lucet_run_function_return_u64(
+          sandbox, func_ptr_void, arg_length, &(args[0]));
+      } else if constexpr (std::is_same_v<T_Wasm_Ret, float>) {
+        ret = lucet_run_function_return_f32(
+          sandbox, func_ptr_void, arg_length, &(args[0]));
+      } else if constexpr (std::is_same_v<T_Wasm_Ret, double>) {
+        ret = lucet_run_function_return_f64(
+          sandbox, func_ptr_void, arg_length, &(args[0]));
+      } else {
+        static_assert(lucet_detail::false_v<T_Wasm_Ret>,
+                      "Unknown invoke return type");
+      }
 
-    if constexpr (!std::is_void_v<T_Ret>) {
-      return ret;
+      auto serialized_ret = serialize_to_sandbox<T_Ret>(ret);
+      // free only after serializing return, as return values such as structs
+      // are returned as pointers which we must free
+      for (size_t i = 0; i < alloc_length; i++) {
+        impl_free_in_sandbox(allocations[i]);
+      }
+      return serialized_ret;
     }
   }
 

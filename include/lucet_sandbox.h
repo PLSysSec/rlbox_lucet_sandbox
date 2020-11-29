@@ -55,6 +55,22 @@ void* lucet_lookup_function(LucetSandboxInstance *inst,
 void lucet_set_curr_instance(LucetSandboxInstance *inst);
 void lucet_clear_curr_instance(LucetSandboxInstance *inst);
 
+void lucet_run_function_return_void(LucetSandboxInstance *inst,
+                                    void* func_ptr, int argc,
+                                    LucetValue *argv);
+uint32_t lucet_run_function_return_u32(LucetSandboxInstance *inst,
+                                       void* func_ptr, int argc,
+                                       LucetValue *argv);
+uint64_t lucet_run_function_return_u64(LucetSandboxInstance *inst,
+                                       void* func_ptr, int argc,
+                                       LucetValue *argv);
+float lucet_run_function_return_f32(LucetSandboxInstance *inst,
+                                    void* func_ptr, int argc,
+                                    LucetValue *argv);
+double lucet_run_function_return_f64(LucetSandboxInstance *inst,
+                                     void* func_ptr, int argc,
+                                     LucetValue *argv);
+
 uintptr_t lucet_get_reserved_callback_slot_val(void *inst,
                                                uint32_t slot_number);
 LucetFunctionTable lucet_get_function_pointer_table(void *inst);

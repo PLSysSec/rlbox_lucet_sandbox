@@ -81,7 +81,8 @@ include(FetchContent)
 
 FetchContent_Declare(
   rlbox
-  GIT_REPOSITORY https://github.com/PLSysSec/rlbox_api_cpp17.git)
+  GIT_REPOSITORY https://github.com/PLSysSec/rlbox_api_cpp17.git
+  GIT_TAG origin/gettimeofday)
 FetchContent_GetProperties(rlbox)
 if(NOT rlbox_POPULATED)
   FetchContent_Populate(rlbox)

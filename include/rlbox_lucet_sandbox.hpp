@@ -398,7 +398,8 @@ private:
       T_FormalRet ret = *ptr;
       return ret;
     } else {
-      return arg;
+      T_FormalRet ret = (T_FormalRet) arg;
+      return ret;
     }
   }
 

@@ -271,5 +271,5 @@ catch_discover_tests(test_rlbox_glue)
 # Shortcuts ###################
 
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} -V)
-add_dependencies(check test_rlbox_glue)
+add_dependencies(check test_rlbox_glue glue_lib_wasm)
 
